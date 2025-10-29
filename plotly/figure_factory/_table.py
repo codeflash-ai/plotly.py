@@ -15,7 +15,8 @@ def validate_table(table_text, font_colors):
 
     See FigureFactory.create_table() for params
     """
-    font_colors_len_options = [1, 3, len(table_text)]
+    # Inline calculation as tuple for faster lookups
+    font_colors_len_options = (1, 3, len(table_text))
     if len(font_colors) not in font_colors_len_options:
         raise exceptions.PlotlyError(
             "Oops, font_colors should be a list of length 1, 3 or len(text)"
@@ -91,7 +92,7 @@ def create_table(
 
     >>> from plotly.figure_factory import create_table
     >>> import pandas as pd
-    >>> df = pd.read_csv('http://www.stat.ubc.ca/~jenny/notOcto/STAT545A/examples/gapminder/data/gapminderDataFiveYear.txt', sep='\t')
+    >>> df = pd.read_csv('http://www.stat.ubc.ca/~jenny/notOcto/STAT545A/examples/gapminder/data/gapminderDataFiveYear.txt', sep='	')
     >>> df_p = df[0:25]
     >>> table_simple = create_table(df_p)
     >>> table_simple.show()
@@ -109,7 +110,8 @@ def create_table(
     )
 
     validate_table(table_text, font_colors)
-    table_matrix = _Table(
+    # Only create one _Table object for both matrix and annotations
+    tbl = _Table(
         table_text,
         colorscale,
         font_colors,
@@ -117,16 +119,9 @@ def create_table(
         index_title,
         annotation_offset,
         **kwargs,
-    ).get_table_matrix()
-    annotations = _Table(
-        table_text,
-        colorscale,
-        font_colors,
-        index,
-        index_title,
-        annotation_offset,
-        **kwargs,
-    ).make_table_annotations()
+    )
+    table_matrix = tbl.get_table_matrix()
+    annotations = tbl.make_table_annotations()
 
     trace = dict(
         type="heatmap",
@@ -179,22 +174,27 @@ class _Table(object):
         annotation_offset,
         **kwargs,
     ):
+        # Optimize DataFrame conversion by materializing only once
         if pd and isinstance(table_text, pd.DataFrame):
             headers = table_text.columns.tolist()
             table_text_index = table_text.index.tolist()
+            # .values.tolist() is fastest for conversion
             table_text = table_text.values.tolist()
             table_text.insert(0, headers)
             if index:
                 table_text_index.insert(0, index_title)
-                for i in range(len(table_text)):
-                    table_text[i].insert(0, table_text_index[i])
+                # Use zip here to avoid indexing multiple times
+                for arr, idx in zip(table_text, table_text_index):
+                    arr.insert(0, idx)
         self.table_text = table_text
         self.colorscale = colorscale
         self.font_colors = font_colors
         self.index = index
         self.annotation_offset = annotation_offset
-        self.x = range(len(table_text[0]))
-        self.y = range(len(table_text))
+        # Precompute x, y as lists for slightly faster access/indexing
+        # since range objects are slower for repeated indexing than lists
+        self.x = list(range(len(table_text[0])))
+        self.y = list(range(len(table_text)))
 
     def get_table_matrix(self):
         """
@@ -203,18 +203,30 @@ class _Table(object):
         :rtype (list[list]) table_matrix: z matrix to make heatmap with striped
             table coloring.
         """
-        header = [0] * len(self.table_text[0])
-        odd_row = [0.5] * len(self.table_text[0])
-        even_row = [1] * len(self.table_text[0])
-        table_matrix = [None] * len(self.table_text)
-        table_matrix[0] = header
-        for i in range(1, len(self.table_text), 2):
-            table_matrix[i] = odd_row
-        for i in range(2, len(self.table_text), 2):
-            table_matrix[i] = even_row
+        nrows = len(self.table_text)
+        ncols = len(self.table_text[0])
+
+        # Avoid repeated len() calls and for efficiency, preallocate with direct references
+        # To avoid mutating the template rows (since they are assigned directly),
+        # we clone them for each assignment, which is required since later we overwrite cells of some rows
+        header = [0] * ncols
+        odd_row = [0.5] * ncols
+        even_row = [1] * ncols
+
+        table_matrix = [None] * nrows
+        table_matrix[0] = header[:]
+        # Optimize row assignment loops to a single pass, with slice assignment
+        for i in range(1, nrows):
+            if i % 2 == 1:
+                table_matrix[i] = odd_row[:]
+            else:
+                table_matrix[i] = even_row[:]
+
         if self.index:
-            for array in table_matrix:
-                array[0] = 0
+            # Optimize index coloring by direct indexing, avoids overhead of Python iterator
+            for i in range(nrows):
+                table_matrix[i][0] = 0
+
         return table_matrix
 
     def get_table_font_color(self):
@@ -252,23 +264,44 @@ class _Table(object):
         """
         all_font_colors = _Table.get_table_font_color(self)
         annotations = []
-        for n, row in enumerate(self.table_text):
-            for m, val in enumerate(row):
+        # Pre-bind methods and attribute lookups for small attribute access win
+        table_text = self.table_text
+        font_colors_0 = self.font_colors[0]
+        annotation_offset = self.annotation_offset
+        x = self.x
+        y = self.y
+        index = self.index
+
+        # Pre-Bind graph_objs.layout.Annotation to local
+        Annotation = graph_objs.layout.Annotation
+
+        # Slight speedup by removing second level variable lookup in loops
+        append_ann = annotations.append
+
+        # Instead of enumerate, use while loop for tight inner loop
+        nrows = len(table_text)
+        for n in range(nrows):
+            row = table_text[n]
+            all_font_color = all_font_colors[n]
+            mcols = len(row)
+            for m in range(mcols):
+                val = row[m]
                 # Bold text in header and index
-                format_text = (
-                    "<b>" + str(val) + "</b>"
-                    if n == 0 or self.index and m < 1
-                    else str(val)
-                )
+                if n == 0 or (index and m < 1):
+                    format_text = "<b>" + str(val) + "</b>"
+                else:
+                    format_text = str(val)
                 # Match font color of index to font color of header
-                font_color = (
-                    self.font_colors[0] if self.index and m == 0 else all_font_colors[n]
-                )
-                annotations.append(
-                    graph_objs.layout.Annotation(
+                if index and m == 0:
+                    font_color = font_colors_0
+                else:
+                    font_color = all_font_color
+                # Don't factor out keyword arguments for Attribute creation, preserve logic and signature
+                append_ann(
+                    Annotation(
                         text=format_text,
-                        x=self.x[m] - self.annotation_offset,
-                        y=self.y[n],
+                        x=x[m] - annotation_offset,
+                        y=y[n],
                         xref="x1",
                         yref="y1",
                         align="left",
