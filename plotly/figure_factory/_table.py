@@ -228,19 +228,22 @@ class _Table(object):
         :rtype (list[list]) all_font_colors: list of font colors for each row
             in table.
         """
-        if len(self.font_colors) == 1:
-            all_font_colors = self.font_colors * len(self.table_text)
-        elif len(self.font_colors) == 3:
-            all_font_colors = list(range(len(self.table_text)))
-            all_font_colors[0] = self.font_colors[0]
-            for i in range(1, len(self.table_text), 2):
-                all_font_colors[i] = self.font_colors[1]
-            for i in range(2, len(self.table_text), 2):
-                all_font_colors[i] = self.font_colors[2]
-        elif len(self.font_colors) == len(self.table_text):
+        n_rows = len(self.table_text)
+        n_font_colors = len(self.font_colors)
+
+        if n_font_colors == 1:
+            # Repeat the single color for all rows; Python list multiplication is fast
+            all_font_colors = self.font_colors * n_rows
+        elif n_font_colors == 3:
+            # Allocate the list directly up front; set header and alternates efficiently
+            fc0, fc1, fc2 = self.font_colors
+            all_font_colors = [fc0] + [fc1 if i % 2 else fc2 for i in range(1, n_rows)]
+        elif n_font_colors == n_rows:
+            # Direct assignment, nothing to improve
             all_font_colors = self.font_colors
         else:
-            all_font_colors = ["#000000"] * len(self.table_text)
+            # Fallback: all black
+            all_font_colors = ["#000000"] * n_rows
         return all_font_colors
 
     def make_table_annotations(self):
