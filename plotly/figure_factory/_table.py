@@ -228,19 +228,25 @@ class _Table(object):
         :rtype (list[list]) all_font_colors: list of font colors for each row
             in table.
         """
-        if len(self.font_colors) == 1:
-            all_font_colors = self.font_colors * len(self.table_text)
-        elif len(self.font_colors) == 3:
-            all_font_colors = list(range(len(self.table_text)))
+        nrows = len(self.table_text)
+        ncolors = len(self.font_colors)
+        if ncolors == 1:
+            all_font_colors = self.font_colors * nrows
+        elif ncolors == 3:
+            # Pre-allocate and fill directly for better cache locality and speed
+            all_font_colors = [None] * nrows
             all_font_colors[0] = self.font_colors[0]
-            for i in range(1, len(self.table_text), 2):
-                all_font_colors[i] = self.font_colors[1]
-            for i in range(2, len(self.table_text), 2):
-                all_font_colors[i] = self.font_colors[2]
-        elif len(self.font_colors) == len(self.table_text):
+            # Use slice assignment for odd/even rows to avoid per-row loop overhead
+            all_font_colors[1:nrows:2] = [self.font_colors[1]] * (
+                (nrows - 1) // 2 + (nrows - 1) % 2
+            )
+            all_font_colors[2:nrows:2] = [self.font_colors[2]] * (
+                (nrows - 2) // 2 + (nrows - 2) % 2
+            )
+        elif ncolors == nrows:
             all_font_colors = self.font_colors
         else:
-            all_font_colors = ["#000000"] * len(self.table_text)
+            all_font_colors = ["#000000"] * nrows
         return all_font_colors
 
     def make_table_annotations(self):
@@ -252,23 +258,35 @@ class _Table(object):
         """
         all_font_colors = _Table.get_table_font_color(self)
         annotations = []
-        for n, row in enumerate(self.table_text):
+        table_text = self.table_text
+        x = self.x
+        y = self.y
+        annotation_offset = self.annotation_offset
+        index = self.index
+        font_colors = self.font_colors
+
+        # Precompute frequently accessed properties for tight inner loop
+        annotations_append = annotations.append
+        graph_objs_layout_Annotation = graph_objs.layout.Annotation
+
+        for n, row in enumerate(table_text):
+            # For each cell in row
             for m, val in enumerate(row):
                 # Bold text in header and index
-                format_text = (
-                    "<b>" + str(val) + "</b>"
-                    if n == 0 or self.index and m < 1
-                    else str(val)
-                )
+                if n == 0 or (index and m < 1):
+                    format_text = "<b>" + str(val) + "</b>"
+                else:
+                    format_text = str(val)
                 # Match font color of index to font color of header
-                font_color = (
-                    self.font_colors[0] if self.index and m == 0 else all_font_colors[n]
-                )
-                annotations.append(
-                    graph_objs.layout.Annotation(
+                if index and m == 0:
+                    font_color = font_colors[0]
+                else:
+                    font_color = all_font_colors[n]
+                annotations_append(
+                    graph_objs_layout_Annotation(
                         text=format_text,
-                        x=self.x[m] - self.annotation_offset,
-                        y=self.y[n],
+                        x=x[m] - annotation_offset,
+                        y=y[n],
                         xref="x1",
                         yref="y1",
                         align="left",
