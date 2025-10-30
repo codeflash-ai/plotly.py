@@ -20,7 +20,7 @@ from _plotly_utils.utils import (
 from _plotly_utils.exceptions import PlotlyKeyError
 from .optional_imports import get_module
 
-from . import shapeannotation
+from . import animation, shapeannotation
 from . import _subplots
 
 # Create Undefined sentinel value
@@ -480,38 +480,23 @@ class BaseFigure(object):
         self._validate = kwargs.pop("_validate", True)
 
         # Assign layout_plotly to layout
-        # ------------------------------
-        # See docstring note for explanation
         layout = layout_plotly
 
         # Subplot properties
-        # ------------------
-        # These properties are used by the tools.make_subplots logic.
-        # We initialize them to None here, before checking if the input data
-        # object is a BaseFigure, or a dict with _grid_str and _grid_ref
-        # properties, in which case we bring over the _grid* properties of
-        # the input
         self._grid_str = None
         self._grid_ref = None
 
         # Handle case where data is a Figure or Figure-like dict
-        # ------------------------------------------------------
         if isinstance(data, BaseFigure):
-            # Bring over subplot fields
             self._grid_str = data._grid_str
             self._grid_ref = data._grid_ref
-
-            # Extract data, layout, and frames
             data, layout, frames = data.data, data.layout, data.frames
 
         elif isinstance(data, dict) and (
             "data" in data or "layout" in data or "frames" in data
         ):
-            # Bring over subplot fields
             self._grid_str = data.get("_grid_str", None)
             self._grid_ref = data.get("_grid_ref", None)
-
-            # Extract data, layout, and frames
             data, layout, frames = (
                 data.get("data", None),
                 data.get("layout", None),
@@ -519,137 +504,58 @@ class BaseFigure(object):
             )
 
         # Handle data (traces)
-        # --------------------
-        # ### Construct data validator ###
-        # This is the validator that handles importing sequences of trace
-        # objects
-        # We make a copy because we are overriding the set_uid attribute
-        # and do not want to alter all other uses of the cached data_validator
         self._data_validator = copy(data_validator)
         self._data_validator.set_uid = self._set_trace_uid
 
-        # ### Import traces ###
         data = self._data_validator.validate_coerce(
             data, skip_invalid=skip_invalid, _validate=self._validate
         )
 
-        # ### Save tuple of trace objects ###
         self._data_objs = data
-
-        # ### Import clone of trace properties ###
-        # The _data property is a list of dicts containing the properties
-        # explicitly set by the user for each trace.
         self._data = [deepcopy(trace._props) for trace in data]
-
-        # ### Create data defaults ###
-        # _data_defaults is a tuple of dicts, one for each trace. When
-        # running in a widget context, these defaults are populated with
-        # all property values chosen by the Plotly.js library that
-        # aren't explicitly specified by the user.
-        #
-        # Note: No property should exist in both the _data and
-        # _data_defaults for the same trace.
         self._data_defaults = [{} for _ in data]
 
-        # ### Reparent trace objects ###
         for trace_ind, trace in enumerate(data):
-            # By setting the trace's parent to be this figure, we tell the
-            # trace object to use the figure's _data and _data_defaults
-            # dicts to get/set it's properties, rather than using the trace
-            # object's internal _orphan_props dict.
             trace._parent = self
-
-            # We clear the orphan props since the trace no longer needs then
             trace._orphan_props.clear()
-
-            # Set trace index
             trace._trace_ind = trace_ind
 
         # Layout
-        # ------
-        # ### Construct layout validator ###
-        # This is the validator that handles importing Layout objects
         self._layout_validator = layout_validator
-
-        # ### Import Layout ###
         self._layout_obj = self._layout_validator.validate_coerce(
             layout, skip_invalid=skip_invalid, _validate=self._validate
         )
-
-        # ### Import clone of layout properties ###
         self._layout = deepcopy(self._layout_obj._props)
-
-        # ### Initialize layout defaults dict ###
         self._layout_defaults = {}
 
-        # ### Reparent layout object ###
         self._layout_obj._orphan_props.clear()
         self._layout_obj._parent = self
 
         # Config
-        # ------
-        # Pass along default config to the front end. For now this just
-        # ensures that the plotly domain url gets passed to the front end.
-        # In the future we can extend this to allow the user to supply
-        # arbitrary config options like in plotly.offline.plot/iplot.  But
-        # this will require a fair amount of testing to determine which
-        # options are compatible with FigureWidget.
         from plotly.offline.offline import _get_jconfig
 
         self._config = _get_jconfig(None)
 
         # Frames
-        # ------
-
-        # ### Construct frames validator ###
-        # This is the validator that handles importing sequences of frame
-        # objects
         self._frames_validator = frames_validator
-
-        # ### Import frames ###
         self._frame_objs = self._frames_validator.validate_coerce(
             frames, skip_invalid=skip_invalid
         )
 
-        # Note: Because frames are not currently supported in the widget
-        # context, we don't need to follow the pattern above and create
-        # _frames and _frame_defaults properties and then reparent the
-        # frames. The figure doesn't need to be notified of
-        # changes to the properties in the frames object hierarchy.
-
         # Context manager
-        # ---------------
-
-        # ### batch mode indicator ###
-        # Flag that indicates whether we're currently inside a batch_*()
-        # context
         self._in_batch_mode = False
-
-        # ### Batch trace edits ###
-        # Dict from trace indexes to trace edit dicts. These trace edit dicts
-        # are suitable as `data` elements of Plotly.animate, but not
-        # the Plotly.update (See `_build_update_params_from_batch`)
         self._batch_trace_edits = OrderedDict()
-
-        # ### Batch layout edits ###
-        # Dict from layout properties to new layout values. This dict is
-        # directly suitable for use in Plotly.animate and Plotly.update
         self._batch_layout_edits = OrderedDict()
 
         # Animation property validators
-        # -----------------------------
-        from . import animation
 
         self._animation_duration_validator = animation.DurationValidator()
         self._animation_easing_validator = animation.EasingValidator()
 
         # Template
-        # --------
-        # ### Check for default template ###
         self._initialize_layout_template()
 
         # Process kwargs
-        # --------------
         for k, v in kwargs.items():
             err = _check_path_in_prop_tree(self, k)
             if err is None:
@@ -3088,38 +2994,37 @@ Invalid property path '{key_path_str}' for layout
         (dict, dict, list[int])
         """
 
-        # Handle Style / Trace Indexes
-        # ----------------------------
         batch_style_commands = self._batch_trace_edits
-        trace_indexes = sorted(set([trace_ind for trace_ind in batch_style_commands]))
 
-        all_props = sorted(
-            set(
-                [
-                    prop
-                    for trace_style in self._batch_trace_edits.values()
-                    for prop in trace_style
-                ]
-            )
-        )
+        if not batch_style_commands:
+            # Early exit for empty batch
+            return {}, self._batch_layout_edits, []
 
-        # Initialize restyle_data dict with all values undefined
-        restyle_data = {
-            prop: [Undefined for _ in range(len(trace_indexes))] for prop in all_props
-        }
+        # --- Optimization: Use dicts and lists for O(1) index lookups ---
+        # Get trace indexes and a mapping from trace_ind to index
+        trace_inds = list(batch_style_commands.keys())
+        trace_indexes = sorted(trace_inds)
+        trace_index_map = {ind: idx for idx, ind in enumerate(trace_indexes)}
 
-        # Fill in values
+        # Get properties (all_props) in insertion order (python ≥3.7 guarantees OrderedDict insert order)
+        seen_props = {}
+        for trace_style in batch_style_commands.values():
+            for prop in trace_style:
+                seen_props[prop] = None
+        all_props = list(seen_props.keys())
+        all_props.sort()  # behavioral preservation: kept sorted (original code sorts)
+
+        # --- Optimization: Prebuild restyle_data arrays up front, no repeated .index ---
+        num_traces = len(trace_indexes)
+        restyle_data = {prop: [Undefined] * num_traces for prop in all_props}
+
         for trace_ind, trace_style in batch_style_commands.items():
+            trace_idx = trace_index_map[trace_ind]  # O(1) lookup instead of .index()
             for trace_prop, trace_val in trace_style.items():
-                restyle_trace_index = trace_indexes.index(trace_ind)
-                restyle_data[trace_prop][restyle_trace_index] = trace_val
+                restyle_data[trace_prop][trace_idx] = trace_val
 
-        # Handle Layout
-        # -------------
         relayout_data = self._batch_layout_edits
 
-        # Return plotly_update params
-        # ---------------------------
         return restyle_data, relayout_data, trace_indexes
 
     @contextmanager
