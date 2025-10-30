@@ -493,20 +493,20 @@ def get_graph_obj(obj, obj_type=None):
 
 
 def _replace_newline(obj):
-    """Replaces '\n' with '<br>' for all strings in a collection."""
+    """Replaces '
+    ' with '<br>' for all strings in a collection."""
     if isinstance(obj, dict):
-        d = dict()
-        for key, val in list(obj.items()):
+        # Avoid calling list() on dict_items (no need for extra list allocation)
+        d = {}
+        for key, val in obj.items():
             d[key] = _replace_newline(val)
         return d
     elif isinstance(obj, list):
-        temp = list()
-        for index, entry in enumerate(obj):
-            temp += [_replace_newline(entry)]
-        return temp
+        # Use list comprehension for efficiency
+        return [_replace_newline(entry) for entry in obj]
     elif isinstance(obj, str):
-        s = obj.replace("\n", "<br>")
-        if s != obj:
+        if "\n" in obj:
+            s = obj.replace("\n", "<br>")
             warnings.warn(
                 "Looks like you used a newline character: '\\n'.\n\n"
                 "Plotly uses a subset of HTML escape characters\n"
@@ -515,7 +515,9 @@ def _replace_newline(obj):
                 "have been converted to '<br>' so they will show \n"
                 "up right on your Plotly figure!"
             )
-        return s
+            return s
+        else:
+            return obj
     else:
         return obj  # we return the actual reference... but DON'T mutate.
 
