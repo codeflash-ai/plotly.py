@@ -50,18 +50,18 @@ def _return_label(original_label, facet_labels, facet_var):
 
 
 def _legend_annotation(color_name):
-    legend_title = dict(
-        textangle=0,
-        xanchor="left",
-        yanchor="middle",
-        x=LEGEND_ANNOT_X,
-        y=1.03,
-        showarrow=False,
-        xref="paper",
-        yref="paper",
-        text="factor({})".format(color_name),
-        font=dict(size=13, color="#000000"),
-    )
+    legend_title = {
+        "textangle": 0,
+        "xanchor": "left",
+        "yanchor": "middle",
+        "x": LEGEND_ANNOT_X,
+        "y": 1.03,
+        "showarrow": False,
+        "xref": "paper",
+        "yref": "paper",
+        "text": f"factor({color_name})",
+        "font": {"size": 13, "color": "#000000"},
+    }
     return legend_title
 
 
