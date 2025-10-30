@@ -40,13 +40,12 @@ def _is_flipped(num):
 
 
 def _return_label(original_label, facet_labels, facet_var):
+    # For dict, use getitem (fast), avoid formatting unless necessary
     if isinstance(facet_labels, dict):
-        label = facet_labels[original_label]
-    elif isinstance(facet_labels, str):
-        label = "{}: {}".format(facet_var, original_label)
-    else:
-        label = original_label
-    return label
+        return facet_labels[original_label]
+    if isinstance(facet_labels, str):
+        return f"{facet_var}: {original_label}"
+    return original_label
 
 
 def _legend_annotation(color_name):
