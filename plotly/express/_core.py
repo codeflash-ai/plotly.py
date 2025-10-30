@@ -2427,55 +2427,59 @@ def get_groups_and_orders(args, grouper):
     """
     orders = {} if "category_orders" not in args else args["category_orders"].copy()
     df: nw.DataFrame = args["data_frame"]
-    # figure out orders and what the single group name would be if there were one
     single_group_name = []
     unique_cache = dict()
-
-    for i, col in enumerate(grouper):
+    # Precompute all required unique values up front for better memory locality
+    for col in grouper:
         if col == one_group:
             single_group_name.append("")
         else:
-            if col not in unique_cache:
-                unique_cache[col] = (
-                    df.get_column(col).unique(maintain_order=True).to_list()
-                )
-            uniques = unique_cache[col]
+            # Use setdefault to avoid repeated lookups/inserts
+            uniques = unique_cache.setdefault(
+                col, df.get_column(col).unique(maintain_order=True).to_list()
+            )
             if len(uniques) == 1:
                 single_group_name.append(uniques[0])
+            # Prepend uniques to user's orders and deduplicate efficiently
             if col not in orders:
                 orders[col] = uniques
             else:
-                orders[col] = list(OrderedDict.fromkeys(list(orders[col]) + uniques))
+                # Only add values from uniques that *aren't* in user-supplied order to avoid massive O(N^2)
+                seen = set(orders[col])
+                orders[col].extend(
+                    u for u in uniques if u not in seen and not seen.add(u)
+                )
 
     if len(single_group_name) == len(grouper):
-        # we have a single group, so we can skip all group-by operations!
         groups = {tuple(single_group_name): df}
     else:
         required_grouper = [group for group in orders if group in grouper]
-        grouped = dict(df.group_by(required_grouper, drop_null_keys=True).__iter__())
-
-        sorted_group_names = sorted(
-            grouped.keys(),
-            key=lambda values: [
-                orders[group].index(value) if value in orders[group] else -1
-                for group, value in zip(required_grouper, values)
-            ],
-        )
-
-        # calculate the full group_names by inserting "" in the tuple index for one_group groups
-        full_sorted_group_names = [
-            tuple(
-                [
-                    (
-                        ""
-                        if col == one_group
-                        else sub_group_names[required_grouper.index(col)]
-                    )
-                    for col in grouper
-                ]
-            )
-            for sub_group_names in sorted_group_names
+        # Use list comprehension instead of dict() constructor for speed with large iterators
+        grouped = {k: v for k, v in df.group_by(required_grouper, drop_null_keys=True)}
+        orders_lists = [orders[group] for group in required_grouper]
+        orders_indices = [
+            {v: i for i, v in enumerate(order_list)} for order_list in orders_lists
         ]
+
+        # Inline loop for sorted keys to avoid repeated index() lookups
+        def sort_key(values):
+            # Each value's index in corresponding group/order, else -1
+            return [orders_indices[i].get(value, -1) for i, value in enumerate(values)]
+
+        sorted_group_names = sorted(grouped.keys(), key=sort_key)
+
+        # Zip indices only once instead of O(N^2) via index lookups
+        group_col_map = {i: col for i, col in enumerate(grouper)}
+        req_grouper_index_map = {col: i for i, col in enumerate(required_grouper)}
+        full_sorted_group_names = []
+        for sub_group_names in sorted_group_names:
+            temp = []
+            for idx, col in enumerate(grouper):
+                if col == one_group:
+                    temp.append("")
+                else:
+                    temp.append(sub_group_names[req_grouper_index_map[col]])
+            full_sorted_group_names.append(tuple(temp))
 
         groups = {
             sf: grouped[s] for sf, s in zip(full_sorted_group_names, sorted_group_names)
