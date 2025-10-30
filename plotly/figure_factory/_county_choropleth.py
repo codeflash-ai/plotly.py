@@ -272,41 +272,46 @@ def _human_format(number):
 def _intervals_as_labels(array_of_intervals, round_legend_values, exponent_format):
     """
     Transform an number interval to a clean string for legend
-
     Example: [-inf, 30] to '< 30'
     """
-    infs = [float("-inf"), float("inf")]
+    inf_minus = float("-inf")
+    inf_plus = float("inf")
+    # Convert to tuple for faster lookup
+    infs = (inf_minus, inf_plus)
     string_intervals = []
+    append = string_intervals.append  # Minor micro-opt
+    # Pre-bind commonly used functions for minor speedup
+    human_format = _human_format
+    format_number = lambda x: f"{x:,}"
     for interval in array_of_intervals:
-        # round to 2nd decimal place
         if round_legend_values:
-            rnd_interval = [
-                (int(interval[i]) if interval[i] not in infs else interval[i])
-                for i in range(2)
-            ]
+            # Use direct indexing, for-loop overhead avoided
+            i0, i1 = interval[0], interval[1]
+            rnd_i0 = int(i0) if i0 not in infs else i0
+            rnd_i1 = int(i1) if i1 not in infs else i1
+            num0, num1 = rnd_i0, rnd_i1
         else:
-            rnd_interval = [round(interval[0], 2), round(interval[1], 2)]
-
-        num0 = rnd_interval[0]
-        num1 = rnd_interval[1]
+            i0, i1 = interval[0], interval[1]
+            num0 = round(i0, 2)
+            num1 = round(i1, 2)
         if exponent_format:
             if num0 not in infs:
-                num0 = _human_format(num0)
+                num0 = human_format(num0)
             if num1 not in infs:
-                num1 = _human_format(num1)
+                num1 = human_format(num1)
         else:
             if num0 not in infs:
-                num0 = "{:,}".format(num0)
+                num0 = format_number(num0)
             if num1 not in infs:
-                num1 = "{:,}".format(num1)
-
-        if num0 == float("-inf"):
-            as_str = "< {}".format(num1)
-        elif num1 == float("inf"):
-            as_str = "> {}".format(num0)
+                num1 = format_number(num1)
+        # Output string determined by interval inf endpoints
+        if num0 == inf_minus:
+            as_str = f"< {num1}"
+        elif num1 == inf_plus:
+            as_str = f"> {num0}"
         else:
-            as_str = "{} - {}".format(num0, num1)
-        string_intervals.append(as_str)
+            as_str = f"{num0} - {num1}"
+        append(as_str)
     return string_intervals
 
 
