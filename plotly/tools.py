@@ -580,8 +580,8 @@ class FigureFactory(object):
             # The method name stayed the same.
             new_method = old_method
         warnings.warn(
-            "plotly.tools.FigureFactory.{} is deprecated. "
-            "Use plotly.figure_factory.{}".format(old_method, new_method)
+            f"plotly.tools.FigureFactory.{old_method} is deprecated. "
+            f"Use plotly.figure_factory.{new_method}"
         )
 
     @staticmethod

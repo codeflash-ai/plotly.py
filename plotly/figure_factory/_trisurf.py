@@ -492,6 +492,7 @@ def create_trisurf(
         gridcolor=gridcolor,
         zerolinecolor=zerolinecolor,
     )
+    # Use dict unpacking for aspectratio (faster than repeated dict key lookups)
     layout = graph_objs.Layout(
         title=title,
         width=width,
@@ -500,9 +501,7 @@ def create_trisurf(
             xaxis=graph_objs.layout.scene.XAxis(**axis),
             yaxis=graph_objs.layout.scene.YAxis(**axis),
             zaxis=graph_objs.layout.scene.ZAxis(**axis),
-            aspectratio=dict(
-                x=aspectratio["x"], y=aspectratio["y"], z=aspectratio["z"]
-            ),
+            aspectratio={**aspectratio},
         ),
     )
 
