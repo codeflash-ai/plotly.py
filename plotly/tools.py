@@ -13,6 +13,9 @@ import os
 
 from plotly import exceptions, optional_imports
 from plotly.files import PLOTLY_DIR
+from plotly.figure_factory import (
+    create_scatterplotmatrix as _cached_create_scatterplotmatrix,
+)
 
 DEFAULT_PLOTLY_COLORS = [
     "rgb(31, 119, 180)",
@@ -650,9 +653,7 @@ class FigureFactory(object):
     @staticmethod
     def create_scatterplotmatrix(*args, **kwargs):
         FigureFactory._deprecated("create_scatterplotmatrix")
-        from plotly.figure_factory import create_scatterplotmatrix
-
-        return create_scatterplotmatrix(*args, **kwargs)
+        return _cached_create_scatterplotmatrix(*args, **kwargs)
 
     @staticmethod
     def create_streamline(*args, **kwargs):
