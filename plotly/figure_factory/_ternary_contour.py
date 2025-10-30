@@ -240,16 +240,23 @@ def _colors(ncontours, colormap=None):
             "Colorscale must be a valid Plotly Colorscale."
             "The available colorscale names are {}".format(clrs.PLOTLY_SCALES.keys())
         )
+
     values = np.linspace(0, 1, ncontours)
     vals_cmap = np.array([pair[0] for pair in cmap])
     cols = np.array([pair[1] for pair in cmap])
-    inds = np.searchsorted(vals_cmap, values)
-    if "#" in cols[0]:  # for Viridis
+
+    # Pre-process RGB colors if necessary
+    if "#" in cols[0]:  # for Viridis and similar
         cols = [clrs.label_rgb(clrs.hex_to_rgb(col)) for col in cols]
 
+    # Use a list, avoid unnecessary numpy conversion for output
     colors = [cols[0]]
+
+    inds = np.searchsorted(vals_cmap, values)
+    # Cache vals_cmap for loop use
     for ind, val in zip(inds[1:], values[1:]):
-        val1, val2 = vals_cmap[ind - 1], vals_cmap[ind]
+        val1 = vals_cmap[ind - 1]
+        val2 = vals_cmap[ind]
         interm = (val - val1) / (val2 - val1)
         col = clrs.find_intermediate_color(
             cols[ind - 1], cols[ind], interm, colortype="rgb"

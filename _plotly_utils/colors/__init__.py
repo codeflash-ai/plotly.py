@@ -717,7 +717,7 @@ def label_rgb(colors):
     """
     Takes tuple (a, b, c) and returns an rgb color 'rgb(a, b, c)'
     """
-    return "rgb(%s, %s, %s)" % (colors[0], colors[1], colors[2])
+    return f"rgb({colors[0]}, {colors[1]}, {colors[2]})"
 
 
 def unlabel_rgb(colors):
