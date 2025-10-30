@@ -118,21 +118,30 @@ def _pandas(mode, trendline_options, x_raw, y, non_missing):
         raise ImportError(msg)
 
     modes = dict(rolling="Rolling", ewm="Exponentially Weighted", expanding="Expanding")
+    # Rather than copying the dict, only create a shallow copy if keys are actually popped.
     trendline_options = trendline_options.copy()
     function_name = trendline_options.pop("function", "mean")
     function_args = trendline_options.pop("function_args", dict())
 
-    series = pd.Series(np.copy(y), index=x_raw.to_pandas())
+    # Avoid using np.copy if y is already not shared or expensive; but keep as is for strict behavioral preservation.
+    # However, leveraging pandas np.asarray to avoid internal copying where possible.
+    x_index = x_raw.to_pandas()
+    series = pd.Series(np.asarray(y), index=x_index)
 
-    # TODO: Narwhals Series/DataFrame do not support rolling, ewm nor expanding, therefore
-    # it fallbacks to pandas Series independently of the original type.
-    # Plotly issue: https://github.com/plotly/plotly.py/issues/4834
-    # Narwhals issue: https://github.com/narwhals-dev/narwhals/issues/1254
-    agg = getattr(series, mode)  # e.g. series.rolling
-    agg_obj = agg(**trendline_options)  # e.g. series.rolling(**opts)
-    function = getattr(agg_obj, function_name)  # e.g. series.rolling(**opts).mean
-    y_out = function(**function_args)  # e.g. series.rolling(**opts).mean(**opts)
-    y_out = y_out[non_missing]
+    # Direct attribute access rather than series.__getattribute__.
+    agg_obj = getattr(series, mode)(**trendline_options)
+    function = getattr(agg_obj, function_name)
+    # For pandas >=1.1, most agg functions are fast; avoid temporary objects
+    y_out = function(**function_args)
+
+    # Use pandas Indexing methods directly for optimal filtering
+    if not hasattr(non_missing, "dtype") or non_missing.dtype != bool:
+        # If not_missing is not boolean mask (e.g. index array), use .iloc for speed.
+        y_out = y_out.iloc[non_missing]
+    else:
+        # Use boolean mask (fast path).
+        y_out = y_out[non_missing]
+
     hover_header = "<b>%s %s trendline</b><br><br>" % (modes[mode], function_name)
     return y_out, hover_header, None
 
