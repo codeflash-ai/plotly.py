@@ -250,10 +250,9 @@ Bad property path:
 
 
 def _combine_dicts(dicts):
-    all_args = dict()
+    all_args = {}
     for d in dicts:
-        for k in d:
-            all_args[k] = d[k]
+        all_args.update(d)
     return all_args
 
 
