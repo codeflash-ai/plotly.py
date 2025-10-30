@@ -226,7 +226,19 @@ def _compute_grid(coordinates, values, interp_mode="ilr"):
 
 
 def _polygon_area(x, y):
-    return 0.5 * np.abs(np.dot(x, np.roll(y, 1)) - np.dot(y, np.roll(x, 1)))
+    # Use in-place operations with out parameter to reduce allocations
+    # and improve performance for np.roll and np.dot.
+    # np.roll does not have an 'out' param, but we can preallocate.
+    # For small arrays, minimize overhead. For large arrays, avoid multiple allocations.
+    # But since x and y are always 1D arrays, preallocating and avoiding temporary arrays can help.
+    n = x.shape[0]
+    x_roll = np.empty_like(x)
+    y_roll = np.empty_like(y)
+    x_roll[1:], x_roll[0] = x[:-1], x[-1]
+    y_roll[1:], y_roll[0] = y[:-1], y[-1]
+    # Use np.dot directly
+    area = np.dot(x, y_roll) - np.dot(y, x_roll)
+    return 0.5 * np.abs(area)
 
 
 def _colors(ncontours, colormap=None):
@@ -287,31 +299,37 @@ def _extract_contours(im, values, colors):
     be a faster way to do this, but it works...
     """
     mask_nan = np.isnan(im)
-    im_min, im_max = (
-        im[np.logical_not(mask_nan)].min(),
-        im[np.logical_not(mask_nan)].max(),
-    )
-    zz_min = np.copy(im)
-    zz_min[mask_nan] = 2 * im_min
-    zz_max = np.copy(im)
-    zz_max[mask_nan] = 2 * im_max
+    valid_vals = im[~mask_nan]
+    im_min, im_max = valid_vals.min(), valid_vals.max()
+    # Avoid reallocating zz_min/zz_max by using np.where directly
+    zz_min = np.where(mask_nan, 2 * im_min, im)
+    zz_max = np.where(mask_nan, 2 * im_max, im)
+
+    # Precompute lengths to reduce list allocation churn
     all_contours1, all_values1, all_areas1, all_colors1 = [], [], [], []
     all_contours2, all_values2, all_areas2, all_colors2 = [], [], [], []
+
+    # Group extensions for reduced list operation overhead
     for i, val in enumerate(values):
         contour_level1 = measure.find_contours(zz_min, val)
         contour_level2 = measure.find_contours(zz_max, val)
+        len1 = len(contour_level1)
+        len2 = len(contour_level2)
+
         all_contours1.extend(contour_level1)
-        all_contours2.extend(contour_level2)
-        all_values1.extend([val] * len(contour_level1))
-        all_values2.extend([val] * len(contour_level2))
+        all_values1.extend([val] * len1)
+        # Use list comprehension once for all (grouped extensions)
         all_areas1.extend(
-            [_polygon_area(contour.T[1], contour.T[0]) for contour in contour_level1]
+            (_polygon_area(contour.T[1], contour.T[0]) for contour in contour_level1)
         )
+        all_colors1.extend([colors[i]] * len1)
+
+        all_contours2.extend(contour_level2)
+        all_values2.extend([val] * len2)
         all_areas2.extend(
-            [_polygon_area(contour.T[1], contour.T[0]) for contour in contour_level2]
+            (_polygon_area(contour.T[1], contour.T[0]) for contour in contour_level2)
         )
-        all_colors1.extend([colors[i]] * len(contour_level1))
-        all_colors2.extend([colors[i]] * len(contour_level2))
+        all_colors2.extend([colors[i]] * len2)
     if len(all_contours1) <= len(all_contours2):
         return all_contours1, all_values1, all_areas1, all_colors1
     else:
