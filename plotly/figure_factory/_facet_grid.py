@@ -81,31 +81,26 @@ def _annotation_dict(
             x = 1.03
             textangle = 90
     else:
+        base = (lane - 1) * (temp + SUBPLOT_SPACING) + 0.5 * temp
         if row_col == "col":
-            xanchor = "center"
-            yanchor = "bottom"
-            x = (lane - 1) * (temp + SUBPLOT_SPACING) + 0.5 * temp
-            y = 1.0
-            textangle = 270
+            x, y = base, 1.0
+            xanchor, yanchor, textangle = "center", "bottom", 270
         elif row_col == "row":
-            xanchor = "left"
-            yanchor = "middle"
-            y = (lane - 1) * (temp + SUBPLOT_SPACING) + 0.5 * temp
-            x = 1.0
-            textangle = 0
+            x, y = 1.0, base
+            xanchor, yanchor, textangle = "left", "middle", 0
 
-    annotation_dict = dict(
-        textangle=textangle,
-        xanchor=xanchor,
-        yanchor=yanchor,
-        x=x,
-        y=y,
-        showarrow=False,
-        xref="paper",
-        yref="paper",
-        text=str(text),
-        font=dict(size=13, color=AXIS_TITLE_COLOR),
-    )
+    annotation_dict = {
+        "textangle": textangle,
+        "xanchor": xanchor,
+        "yanchor": yanchor,
+        "x": x,
+        "y": y,
+        "showarrow": False,
+        "xref": "paper",
+        "yref": "paper",
+        "text": str(text),
+        "font": {"size": 13, "color": AXIS_TITLE_COLOR},
+    }
     return annotation_dict
 
 
