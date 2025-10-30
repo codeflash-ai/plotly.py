@@ -583,11 +583,9 @@ class CoCalcRenderer(IFrameRenderer):
     _render_count = 0
 
     def build_filename(self):
-        filename = "{dirname}/figure_{render_count}.html".format(
-            dirname=self.html_directory, render_count=CoCalcRenderer._render_count
-        )
-
-        CoCalcRenderer._render_count += 1
+        count = CoCalcRenderer._render_count
+        filename = f"{self.html_directory}/figure_{count}.html"
+        CoCalcRenderer._render_count = count + 1
         return filename
 
     def build_url(self, filename):
