@@ -1044,20 +1044,38 @@ def _init_subplot_single(
     layout, subplot_type, x_domain, y_domain, max_subplot_ids=None
 ):
     if max_subplot_ids is None:
-        max_subplot_ids = _get_initial_max_subplot_ids()
+        # Inline the optimized construction
+        max_subplot_ids = {
+            "scene": 0,
+            "geo": 0,
+            "polar": 0,
+            "ternary": 0,
+            "map": 0,
+            "mapbox": 0,
+            "xaxis": 0,
+            "yaxis": 0,
+        }
 
     # Add scene to layout
     cnt = max_subplot_ids[subplot_type] + 1
-    label = "{subplot_type}{cnt}".format(
-        subplot_type=subplot_type, cnt=cnt if cnt > 1 else ""
-    )
-    scene = dict(domain={"x": x_domain, "y": y_domain})
+    # Avoid .format overhead by using f-string (it's faster for simple concatenation)
+    # This is only safe because "{cnt if cnt > 1 else ''}" always produces `''` or int
+    # Ensure type correctness and output matches original .format usage
+    if cnt > 1:
+        label = f"{subplot_type}{cnt}"
+    else:
+        label = subplot_type
+    scene = {"domain": {"x": x_domain, "y": y_domain}}
     layout[label] = scene
 
-    trace_key = (
-        "subplot" if subplot_type in _subplot_prop_named_subplot else subplot_type
-    )
+    # Fast membership check and assignment
+    if subplot_type in _subplot_prop_named_subplot:
+        trace_key = "subplot"
+    else:
+        trace_key = subplot_type
 
+    # Tuple construction is faster than namedtuple on large scale,
+    # but we must keep SubplotRef usage per behavioral requirements.
     subplot_ref = SubplotRef(
         subplot_type=subplot_type, layout_keys=(label,), trace_kwargs={trace_key: label}
     )
