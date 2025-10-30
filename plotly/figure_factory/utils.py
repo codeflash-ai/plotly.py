@@ -125,14 +125,16 @@ def endpts_to_intervals(endpts):
     """
     length = len(endpts)
     # Check if endpts is a list or tuple
-    if not (isinstance(endpts, (tuple)) or isinstance(endpts, (list))):
+    if not isinstance(endpts, (list, tuple)):
         raise exceptions.PlotlyError(
             "The intervals_endpts argument must "
             "be a list or tuple of a sequence "
             "of increasing numbers."
         )
-    # Check if endpts contains only numbers
-    for item in endpts:
+    # Check if endpts contains only numbers (no strings)
+    # Do both checks in one pass for efficiency
+    prev = object()  # sentinel
+    for i, item in enumerate(endpts):
         if isinstance(item, str):
             raise exceptions.PlotlyError(
                 "The intervals_endpts argument "
@@ -140,27 +142,21 @@ def endpts_to_intervals(endpts):
                 "sequence of increasing "
                 "numbers."
             )
-    # Check if numbers in endpts are increasing
-    for k in range(length - 1):
-        if endpts[k] >= endpts[k + 1]:
-            raise exceptions.PlotlyError(
-                "The intervals_endpts argument "
-                "must be a list or tuple of a "
-                "sequence of increasing "
-                "numbers."
-            )
-    else:
-        intervals = []
-        # add -inf to intervals
-        intervals.append([float("-inf"), endpts[0]])
-        for k in range(length - 1):
-            interval = []
-            interval.append(endpts[k])
-            interval.append(endpts[k + 1])
-            intervals.append(interval)
-        # add +inf to intervals
-        intervals.append([endpts[length - 1], float("inf")])
-        return intervals
+        if i > 0:
+            if prev >= item:
+                raise exceptions.PlotlyError(
+                    "The intervals_endpts argument "
+                    "must be a list or tuple of a "
+                    "sequence of increasing "
+                    "numbers."
+                )
+        prev = item
+
+    intervals = [[float("-inf"), endpts[0]]]
+    # Use list comprehension for intervals; avoids repeated .append() overhead and is faster in CPython
+    intervals += [[endpts[k], endpts[k + 1]] for k in range(length - 1)]
+    intervals.append([endpts[-1], float("inf")])
+    return intervals
 
 
 def annotation_dict_for_label(
