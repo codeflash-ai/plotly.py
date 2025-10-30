@@ -9,8 +9,6 @@ Functions that USERS will possibly want access to.
 import json
 import warnings
 
-import os
-
 from plotly import exceptions, optional_imports
 from plotly.files import PLOTLY_DIR
 
@@ -694,17 +692,18 @@ def get_config_plotly_server_url():
     -------
     str
     """
-    config_file = os.path.join(PLOTLY_DIR, ".config")
+    config_file = f"{PLOTLY_DIR}/.config"
     default_server_url = "https://plot.ly"
-    if not os.path.exists(config_file):
-        return default_server_url
-    with open(config_file, "rt") as f:
-        try:
-            config_dict = json.load(f)
-            if not isinstance(config_dict, dict):
+    try:
+        with open(config_file, "rt") as f:
+            try:
+                config_dict = json.load(f)
+                if not isinstance(config_dict, dict):
+                    config_dict = {}
+            except Exception:
+                # TODO: issue a warning and bubble it up
                 config_dict = {}
-        except Exception:
-            # TODO: issue a warning and bubble it up
-            config_dict = {}
+    except FileNotFoundError:
+        return default_server_url
 
     return config_dict.get("plotly_domain", default_server_url)
