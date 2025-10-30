@@ -186,11 +186,16 @@ class _Quiver(object):
             and list of startpoint and endpoint y_value pairs separated by a
             None to create the barb of the arrow.
         """
-        self.end_x = [i + j for i, j in zip(self.x, self.u)]
-        self.end_y = [i + j for i, j in zip(self.y, self.v)]
-        empty = [None] * len(self.x)
-        barb_x = utils.flatten(zip(self.x, self.end_x, empty))
-        barb_y = utils.flatten(zip(self.y, self.end_y, empty))
+        x = self.x
+        y = self.y
+        u = self.u
+        v = self.v
+        n = len(x)
+        self.end_x = [i + j for i, j in zip(x, u)]
+        self.end_y = [i + j for i, j in zip(y, v)]
+        empty = [None] * n
+        barb_x = utils.flatten(zip(x, self.end_x, empty))
+        barb_y = utils.flatten(zip(y, self.end_y, empty))
         return barb_x, barb_y
 
     def get_quiver_arrows(self):
