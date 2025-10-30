@@ -82,25 +82,20 @@ def _bullet(
         measure_colors = ["rgb(31, 119, 180)", "rgb(176, 196, 221)"]
 
     for row in range(num_of_lanes):
-        # ranges bars
-        for idx in range(len(df.iloc[row]["ranges"])):
-            inter_colors = clrs.n_colors(
-                range_colors[0], range_colors[1], len(df.iloc[row]["ranges"]), "rgb"
-            )
-            x = (
-                [sorted(df.iloc[row]["ranges"])[-1 - idx]]
-                if orientation == "h"
-                else [0]
-            )
-            y = (
-                [0]
-                if orientation == "h"
-                else [sorted(df.iloc[row]["ranges"])[-1 - idx]]
-            )
+        # Precompute sorted values and colors for ranges
+        sorted_ranges = sorted(df.iloc[row]["ranges"])
+        len_ranges = len(sorted_ranges)
+        inter_colors_ranges = clrs.n_colors(
+            range_colors[0], range_colors[1], len_ranges, "rgb"
+        )
+        for idx in range(len_ranges):
+            value = sorted_ranges[-1 - idx]
+            x = [value] if orientation == "h" else [0]
+            y = [0] if orientation == "h" else [value]
             bar = go.Bar(
                 x=x,
                 y=y,
-                marker=dict(color=inter_colors[-1 - idx]),
+                marker=dict(color=inter_colors_ranges[-1 - idx]),
                 name="ranges",
                 hoverinfo="x" if orientation == "h" else "y",
                 orientation=orientation,
@@ -111,28 +106,20 @@ def _bullet(
             )
             fig.add_trace(bar)
 
-        # measures bars
-        for idx in range(len(df.iloc[row]["measures"])):
-            inter_colors = clrs.n_colors(
-                measure_colors[0],
-                measure_colors[1],
-                len(df.iloc[row]["measures"]),
-                "rgb",
-            )
-            x = (
-                [sorted(df.iloc[row]["measures"])[-1 - idx]]
-                if orientation == "h"
-                else [0.5]
-            )
-            y = (
-                [0.5]
-                if orientation == "h"
-                else [sorted(df.iloc[row]["measures"])[-1 - idx]]
-            )
+        # Precompute sorted values and colors for measures
+        sorted_measures = sorted(df.iloc[row]["measures"])
+        len_measures = len(sorted_measures)
+        inter_colors_measures = clrs.n_colors(
+            measure_colors[0], measure_colors[1], len_measures, "rgb"
+        )
+        for idx in range(len_measures):
+            value = sorted_measures[-1 - idx]
+            x = [value] if orientation == "h" else [0.5]
+            y = [0.5] if orientation == "h" else [value]
             bar = go.Bar(
                 x=x,
                 y=y,
-                marker=dict(color=inter_colors[-1 - idx]),
+                marker=dict(color=inter_colors_measures[-1 - idx]),
                 name="measures",
                 hoverinfo="x" if orientation == "h" else "y",
                 orientation=orientation,

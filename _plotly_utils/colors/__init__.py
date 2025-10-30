@@ -682,35 +682,30 @@ def n_colors(lowcolor, highcolor, n_colors, colortype="tuple"):
         lowcolor = unlabel_rgb(lowcolor)
         highcolor = unlabel_rgb(highcolor)
 
+    def _constrain_color(c):
+        return min(max(c, 0.0), 255.0)
+
     diff_0 = float(highcolor[0] - lowcolor[0])
     incr_0 = diff_0 / (n_colors - 1)
     diff_1 = float(highcolor[1] - lowcolor[1])
     incr_1 = diff_1 / (n_colors - 1)
     diff_2 = float(highcolor[2] - lowcolor[2])
     incr_2 = diff_2 / (n_colors - 1)
-    list_of_colors = []
 
-    def _constrain_color(c):
-        if c > 255.0:
-            return 255.0
-        elif c < 0.0:
-            return 0.0
-        else:
-            return c
-
-    for index in range(n_colors):
-        new_tuple = (
-            _constrain_color(lowcolor[0] + (index * incr_0)),
-            _constrain_color(lowcolor[1] + (index * incr_1)),
-            _constrain_color(lowcolor[2] + (index * incr_2)),
+    # Precompute tuples efficiently with a list comprehension
+    tuples = [
+        (
+            _constrain_color(lowcolor[0] + (i * incr_0)),
+            _constrain_color(lowcolor[1] + (i * incr_1)),
+            _constrain_color(lowcolor[2] + (i * incr_2)),
         )
-        list_of_colors.append(new_tuple)
+        for i in range(n_colors)
+    ]
 
     if colortype == "rgb":
         # back to an rgb string
-        list_of_colors = color_parser(list_of_colors, label_rgb)
-
-    return list_of_colors
+        return color_parser(tuples, label_rgb)
+    return tuples
 
 
 def label_rgb(colors):
