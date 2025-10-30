@@ -10,8 +10,14 @@ def _project_latlon_to_wgs84(lat, lon):
     """
     Projects lat and lon to WGS84, used to get regular hexagons on a mapbox map
     """
-    x = lon * np.pi / 180
-    y = np.arctanh(np.sin(lat * np.pi / 180))
+    # Precompute conversion factors as constants for speed
+    DEG2RAD = np.pi / 180
+
+    # Avoid unnecessary allocation by using np.sin directly on the converted lat
+    lat_rad = lat * DEG2RAD
+    x = lon * DEG2RAD
+    # Use np.sin and np.arctanh in sequence, with local lat_rad to avoid redundant computation
+    y = np.arctanh(np.sin(lat_rad))
     return x, y
 
 
