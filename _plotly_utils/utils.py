@@ -12,6 +12,8 @@ from _plotly_utils.basevalidators import (
     is_homogeneous_array,
 )
 
+_SKIPPED_KEYS = {"geojson", "layer", "layers", "range"}
+
 
 int8min = -128
 int8max = 127
@@ -101,15 +103,20 @@ def is_skipped_key(key):
 
 
 def convert_to_base64(obj):
+    # Inline check for skipped keys for speed
     if isinstance(obj, dict):
         for key, value in obj.items():
-            if is_skipped_key(key):
+            # Use set lookup instead of function call
+            if key in _SKIPPED_KEYS:
                 continue
-            elif is_homogeneous_array(value):
+            # Cache is_homogeneous_array to avoid double checking
+            homogeneous = is_homogeneous_array(value)
+            if homogeneous:
                 obj[key] = to_typed_array_spec(value)
             else:
                 convert_to_base64(value)
-    elif isinstance(obj, list) or isinstance(obj, tuple):
+    elif isinstance(obj, (list, tuple)):
+        # Avoid creating a new list; just recurse directly
         for value in obj:
             convert_to_base64(value)
 
