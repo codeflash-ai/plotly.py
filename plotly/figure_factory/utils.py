@@ -189,48 +189,55 @@ def annotation_dict_for_label(
     :param (bool) right_side: only applicable if row_col is set to 'row'.
     :param (str) text_color: color of the text.
     """
-    temp = (1 - (num_of_lanes - 1) * subplot_spacing) / (num_of_lanes)
+    # Precompute variables used in multiple places
+    lane_index = lane - 1
+    temp = (1 - (num_of_lanes - 1) * subplot_spacing) / num_of_lanes
+    base_pos = lane_index * (temp + subplot_spacing) + 0.5 * temp
+
     if not flipped:
-        xanchor = "center"
-        yanchor = "middle"
         if row_col == "col":
-            x = (lane - 1) * (temp + subplot_spacing) + 0.5 * temp
+            xanchor = "center"
+            yanchor = "middle"
+            x = base_pos
             y = 1.03
             textangle = 0
         elif row_col == "row":
-            y = (lane - 1) * (temp + subplot_spacing) + 0.5 * temp
+            xanchor = "center"
+            yanchor = "middle"
             x = 1.03
+            y = base_pos
             textangle = 90
     else:
         if row_col == "col":
             xanchor = "center"
             yanchor = "bottom"
-            x = (lane - 1) * (temp + subplot_spacing) + 0.5 * temp
+            x = base_pos
             y = 1.0
             textangle = 270
         elif row_col == "row":
             yanchor = "middle"
-            y = (lane - 1) * (temp + subplot_spacing) + 0.5 * temp
+            y = base_pos
             if right_side:
-                x = 1.0
                 xanchor = "left"
+                x = 1.0
             else:
-                x = -0.01
                 xanchor = "right"
+                x = -0.01
             textangle = 0
 
-    annotation_dict = dict(
-        textangle=textangle,
-        xanchor=xanchor,
-        yanchor=yanchor,
-        x=x,
-        y=y,
-        showarrow=False,
-        xref="paper",
-        yref="paper",
-        text=text,
-        font=dict(size=13, color=text_color),
-    )
+    # Pre-construct commonly used constants
+    annotation_dict = {
+        "textangle": textangle,
+        "xanchor": xanchor,
+        "yanchor": yanchor,
+        "x": x,
+        "y": y,
+        "showarrow": False,
+        "xref": "paper",
+        "yref": "paper",
+        "text": text,
+        "font": {"size": 13, "color": text_color},
+    }
     return annotation_dict
 
 
