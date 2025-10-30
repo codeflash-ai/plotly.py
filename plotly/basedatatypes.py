@@ -139,20 +139,13 @@ def _remake_path_from_tuple(props):
     if len(props) == 0:
         return ""
 
-    def _add_square_brackets_to_number(n):
-        if isinstance(n, int):
-            return "[%d]" % (n,)
-        return n
-
-    def _prepend_dot_if_not_number(s):
-        if not s.startswith("["):
-            return "." + s
-        return s
-
-    props_all_str = list(map(_add_square_brackets_to_number, props))
-    props_w_underscore = props_all_str[:1] + list(
-        map(_prepend_dot_if_not_number, props_all_str[1:])
-    )
+    props_w_underscore = []
+    for i, prop in enumerate(props):
+        s = "[%d]" % prop if isinstance(prop, int) else prop
+        if i == 0:
+            props_w_underscore.append(s)
+        else:
+            props_w_underscore.append(s if s.startswith("[") else "." + s)
     return "".join(props_w_underscore)
 
 
