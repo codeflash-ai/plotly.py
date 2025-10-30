@@ -591,7 +591,7 @@ class CoCalcRenderer(IFrameRenderer):
         return filename
 
     def build_url(self, filename):
-        return "{filename}?fullscreen=kiosk".format(filename=filename)
+        return f"{filename}?fullscreen=kiosk"
 
 
 class ExternalRenderer(BaseRenderer):
