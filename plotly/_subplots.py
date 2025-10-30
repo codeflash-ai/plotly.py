@@ -895,14 +895,9 @@ def _configure_shared_axes(
 ):
     rows = len(grid_ref)
     cols = len(grid_ref[0])
+    layout_key_ind = 0 if x_or_y == "x" else 1
 
-    layout_key_ind = ["x", "y"].index(x_or_y)
-
-    if row_dir < 0:
-        rows_iter = range(rows - 1, -1, -1)
-    else:
-        rows_iter = range(rows)
-
+    rows_iter = range(rows - 1, -1, -1) if row_dir < 0 else range(rows)
     if secondary_y:
         cols_iter = range(cols - 1, -1, -1)
         axis_index = 1
@@ -910,16 +905,16 @@ def _configure_shared_axes(
         cols_iter = range(cols)
         axis_index = 0
 
+    # Inline helpers for frequent checks to minimize attribute overhead
+    _xy = "xy"
+
     def update_axis_matches(first_axis_id, subplot_ref, spec, remove_label):
         if subplot_ref is None:
             return first_axis_id
 
-        if x_or_y == "x":
-            span = spec["colspan"]
-        else:
-            span = spec["rowspan"]
+        span = spec["colspan"] if x_or_y == "x" else spec["rowspan"]
 
-        if subplot_ref.subplot_type == "xy" and span == 1:
+        if subplot_ref.subplot_type == _xy and span == 1:
             if first_axis_id is None:
                 first_axis_name = subplot_ref.layout_keys[layout_key_ind]
                 first_axis_id = first_axis_name.replace("axis", "")
@@ -932,31 +927,31 @@ def _configure_shared_axes(
 
         return first_axis_id
 
+    # Pre-allocate and reuse lookup to skip grid_ref cell checks
+    # Also, cache commonly used loop variables
     if shared == "columns" or (x_or_y == "x" and shared is True):
+        ok_to_remove_label = x_or_y == "x"
         for c in cols_iter:
             first_axis_id = None
-            ok_to_remove_label = x_or_y == "x"
             for r in rows_iter:
-                if not grid_ref[r][c]:
+                grid_cell = grid_ref[r][c]
+                if not grid_cell or axis_index >= len(grid_cell):
                     continue
-                if axis_index >= len(grid_ref[r][c]):
-                    continue
-                subplot_ref = grid_ref[r][c][axis_index]
+                subplot_ref = grid_cell[axis_index]
                 spec = specs[r][c]
                 first_axis_id = update_axis_matches(
                     first_axis_id, subplot_ref, spec, ok_to_remove_label
                 )
 
     elif shared == "rows" or (x_or_y == "y" and shared is True):
+        ok_to_remove_label = x_or_y == "y"
         for r in rows_iter:
             first_axis_id = None
-            ok_to_remove_label = x_or_y == "y"
             for c in cols_iter:
-                if not grid_ref[r][c]:
+                grid_cell = grid_ref[r][c]
+                if not grid_cell or axis_index >= len(grid_cell):
                     continue
-                if axis_index >= len(grid_ref[r][c]):
-                    continue
-                subplot_ref = grid_ref[r][c][axis_index]
+                subplot_ref = grid_cell[axis_index]
                 spec = specs[r][c]
                 first_axis_id = update_axis_matches(
                     first_axis_id, subplot_ref, spec, ok_to_remove_label
@@ -966,11 +961,10 @@ def _configure_shared_axes(
         first_axis_id = None
         for ri, r in enumerate(rows_iter):
             for c in cols_iter:
-                if not grid_ref[r][c]:
+                grid_cell = grid_ref[r][c]
+                if not grid_cell or axis_index >= len(grid_cell):
                     continue
-                if axis_index >= len(grid_ref[r][c]):
-                    continue
-                subplot_ref = grid_ref[r][c][axis_index]
+                subplot_ref = grid_cell[axis_index]
                 spec = specs[r][c]
 
                 if x_or_y == "y":
