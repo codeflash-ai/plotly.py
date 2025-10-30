@@ -174,9 +174,14 @@ def _add_shapes_to_fig(fig, annot_rect_color, flipped_rows=False, flipped_cols=F
 
 
 def _make_trace_for_scatter(trace, trace_type, color, **kwargs_marker):
-    if trace_type in ["scatter", "scattergl"]:
+    if trace_type == "scatter" or trace_type == "scattergl":
         trace["mode"] = "markers"
-        trace["marker"] = dict(color=color, **kwargs_marker)
+        if kwargs_marker:
+            marker = kwargs_marker.copy()
+            marker["color"] = color
+            trace["marker"] = marker
+        else:
+            trace["marker"] = {"color": color}
     return trace
 
 
