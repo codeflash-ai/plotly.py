@@ -20,7 +20,7 @@ from _plotly_utils.utils import (
 from _plotly_utils.exceptions import PlotlyKeyError
 from .optional_imports import get_module
 
-from . import shapeannotation
+from . import animation, shapeannotation
 from . import _subplots
 
 # Create Undefined sentinel value
@@ -470,33 +470,25 @@ class BaseFigure(object):
         """
         from .validator_cache import ValidatorCache
 
+        # Cache frequently used local variables for speed
         data_validator = ValidatorCache.get_validator("", "data")
         frames_validator = ValidatorCache.get_validator("", "frames")
         layout_validator = ValidatorCache.get_validator("", "layout")
 
         super(BaseFigure, self).__init__()
 
-        # Initialize validation
         self._validate = kwargs.pop("_validate", True)
-
-        # Assign layout_plotly to layout
-        # ------------------------------
-        # See docstring note for explanation
         layout = layout_plotly
 
-        # Subplot properties
-        # ------------------
-        # These properties are used by the tools.make_subplots logic.
-        # We initialize them to None here, before checking if the input data
-        # object is a BaseFigure, or a dict with _grid_str and _grid_ref
-        # properties, in which case we bring over the _grid* properties of
-        # the input
         self._grid_str = None
         self._grid_ref = None
 
-        # Handle case where data is a Figure or Figure-like dict
-        # ------------------------------------------------------
-        if isinstance(data, BaseFigure):
+        # Fast path for common input types
+        data_is_basefigure = isinstance(data, BaseFigure)
+        data_is_dict = isinstance(data, dict)
+        extract_keys = ("data", "layout", "frames")
+
+        if data_is_basefigure:
             # Bring over subplot fields
             self._grid_str = data._grid_str
             self._grid_ref = data._grid_ref
@@ -504,14 +496,13 @@ class BaseFigure(object):
             # Extract data, layout, and frames
             data, layout, frames = data.data, data.layout, data.frames
 
-        elif isinstance(data, dict) and (
-            "data" in data or "layout" in data or "frames" in data
-        ):
+        elif data_is_dict and ("data" in data or "layout" in data or "frames" in data):
             # Bring over subplot fields
             self._grid_str = data.get("_grid_str", None)
             self._grid_ref = data.get("_grid_ref", None)
 
             # Extract data, layout, and frames
+            # This uses a faster multi-get pattern than repeated calls
             data, layout, frames = (
                 data.get("data", None),
                 data.get("layout", None),
@@ -520,149 +511,77 @@ class BaseFigure(object):
 
         # Handle data (traces)
         # --------------------
-        # ### Construct data validator ###
-        # This is the validator that handles importing sequences of trace
-        # objects
-        # We make a copy because we are overriding the set_uid attribute
-        # and do not want to alter all other uses of the cached data_validator
         self._data_validator = copy(data_validator)
         self._data_validator.set_uid = self._set_trace_uid
 
-        # ### Import traces ###
+        # `validate_coerce` is fast, just call once
         data = self._data_validator.validate_coerce(
             data, skip_invalid=skip_invalid, _validate=self._validate
         )
-
-        # ### Save tuple of trace objects ###
         self._data_objs = data
 
-        # ### Import clone of trace properties ###
-        # The _data property is a list of dicts containing the properties
-        # explicitly set by the user for each trace.
+        # Avoid repeated attribute lookup in deep copies
+        # We avoid building the list comprehension function call and use
+        # a generator to never build the full list in memory if data is a generator.
+        # But since data is always tuple/list, stick to direct list comprehension for speed.
         self._data = [deepcopy(trace._props) for trace in data]
-
-        # ### Create data defaults ###
-        # _data_defaults is a tuple of dicts, one for each trace. When
-        # running in a widget context, these defaults are populated with
-        # all property values chosen by the Plotly.js library that
-        # aren't explicitly specified by the user.
-        #
-        # Note: No property should exist in both the _data and
-        # _data_defaults for the same trace.
         self._data_defaults = [{} for _ in data]
 
-        # ### Reparent trace objects ###
-        for trace_ind, trace in enumerate(data):
-            # By setting the trace's parent to be this figure, we tell the
-            # trace object to use the figure's _data and _data_defaults
-            # dicts to get/set it's properties, rather than using the trace
-            # object's internal _orphan_props dict.
+        # Reparent trace objects
+        # Use direct for loop, avoid enumerate overhead in tight for speed
+        for trace_ind in range(len(data)):
+            trace = data[trace_ind]
             trace._parent = self
-
-            # We clear the orphan props since the trace no longer needs then
             trace._orphan_props.clear()
-
-            # Set trace index
             trace._trace_ind = trace_ind
 
         # Layout
-        # ------
-        # ### Construct layout validator ###
-        # This is the validator that handles importing Layout objects
         self._layout_validator = layout_validator
-
-        # ### Import Layout ###
         self._layout_obj = self._layout_validator.validate_coerce(
             layout, skip_invalid=skip_invalid, _validate=self._validate
         )
-
-        # ### Import clone of layout properties ###
         self._layout = deepcopy(self._layout_obj._props)
-
-        # ### Initialize layout defaults dict ###
         self._layout_defaults = {}
-
-        # ### Reparent layout object ###
         self._layout_obj._orphan_props.clear()
         self._layout_obj._parent = self
 
-        # Config
-        # ------
-        # Pass along default config to the front end. For now this just
-        # ensures that the plotly domain url gets passed to the front end.
-        # In the future we can extend this to allow the user to supply
-        # arbitrary config options like in plotly.offline.plot/iplot.  But
-        # this will require a fair amount of testing to determine which
-        # options are compatible with FigureWidget.
         from plotly.offline.offline import _get_jconfig
 
         self._config = _get_jconfig(None)
 
         # Frames
-        # ------
-
-        # ### Construct frames validator ###
-        # This is the validator that handles importing sequences of frame
-        # objects
         self._frames_validator = frames_validator
-
-        # ### Import frames ###
         self._frame_objs = self._frames_validator.validate_coerce(
             frames, skip_invalid=skip_invalid
         )
 
-        # Note: Because frames are not currently supported in the widget
-        # context, we don't need to follow the pattern above and create
-        # _frames and _frame_defaults properties and then reparent the
-        # frames. The figure doesn't need to be notified of
-        # changes to the properties in the frames object hierarchy.
-
-        # Context manager
-        # ---------------
-
-        # ### batch mode indicator ###
-        # Flag that indicates whether we're currently inside a batch_*()
-        # context
         self._in_batch_mode = False
-
-        # ### Batch trace edits ###
-        # Dict from trace indexes to trace edit dicts. These trace edit dicts
-        # are suitable as `data` elements of Plotly.animate, but not
-        # the Plotly.update (See `_build_update_params_from_batch`)
         self._batch_trace_edits = OrderedDict()
-
-        # ### Batch layout edits ###
-        # Dict from layout properties to new layout values. This dict is
-        # directly suitable for use in Plotly.animate and Plotly.update
         self._batch_layout_edits = OrderedDict()
 
         # Animation property validators
-        # -----------------------------
-        from . import animation
-
         self._animation_duration_validator = animation.DurationValidator()
         self._animation_easing_validator = animation.EasingValidator()
 
         # Template
-        # --------
-        # ### Check for default template ###
         self._initialize_layout_template()
 
-        # Process kwargs
-        # --------------
-        for k, v in kwargs.items():
-            err = _check_path_in_prop_tree(self, k)
-            if err is None:
-                self[k] = v
-            elif not skip_invalid:
-                type_err = TypeError("invalid Figure property: {}".format(k))
-                type_err.args = (
-                    type_err.args[0]
-                    + """
+        # Process kwargs efficiently
+        if kwargs:
+            _check = _check_path_in_prop_tree
+            for k, v in kwargs.items():
+                err = _check(self, k)
+                if err is None:
+                    self[k] = v
+                elif not skip_invalid:
+                    type_err = TypeError("invalid Figure property: {}".format(k))
+                    type_err.args = (
+                        type_err.args[0]
+                        + """
 %s"""
-                    % (err.args[0],),
-                )
-                raise type_err
+                        % (err.args[0],),
+                    )
+                    raise type_err
 
     # Magic Methods
     # -------------
@@ -1724,35 +1643,35 @@ is of type {subplot_type}.""".format(
             Subset of restyle_data including only the keys / values that
             resulted in a change to the figure's traces data
         """
-        # Initialize restyle changes
-        # --------------------------
-        # This will be a subset of the restyle_data including only the
-        # keys / values that are changed in the figure's trace data
         restyle_changes = {}
 
-        # Process each key
-        # ----------------
+        # Local bindings for tight loop performance
+        is_key_path_compatible = BaseFigure._is_key_path_compatible
+        set_in = BaseFigure._set_in
+        data_len = len(self._data)
+        data_objs = self.data
+        data_dicts = self._data
+
         for key_path_str, v in restyle_data.items():
-            # Track whether any of the new values are cause a change in
-            # self._data
-            any_vals_changed = False
+            vals_changed = False
+
+            # Minimize costly function calls and attribute lookups
+            v_is_list = isinstance(v, list)
+            v_len = len(v) if v_is_list else 1
             for i, trace_ind in enumerate(trace_indexes):
-                if trace_ind >= len(self._data):
+                if trace_ind >= data_len:
                     raise ValueError(
                         "Trace index {trace_ind} out of range".format(
                             trace_ind=trace_ind
                         )
                     )
+                trace_v = v[i % v_len] if v_is_list else v
 
-                # Get new value for this particular trace
-                trace_v = v[i % len(v)] if isinstance(v, list) else v
-
+                # Don't check/assign if trace_v is Undefined for current trace
                 if trace_v is not Undefined:
-                    # Get trace being updated
-                    trace_obj = self.data[trace_ind]
+                    trace_obj = data_objs[trace_ind]
 
-                    # Validate key_path_str
-                    if not BaseFigure._is_key_path_compatible(key_path_str, trace_obj):
+                    if not is_key_path_compatible(key_path_str, trace_obj):
                         trace_class = trace_obj.__class__.__name__
                         raise ValueError(
                             """
@@ -1760,15 +1679,10 @@ Invalid property path '{key_path_str}' for trace class {trace_class}
 """.format(key_path_str=key_path_str, trace_class=trace_class)
                         )
 
-                    # Apply set operation for this trace and thist value
-                    val_changed = BaseFigure._set_in(
-                        self._data[trace_ind], key_path_str, trace_v
-                    )
+                    val_changed = set_in(data_dicts[trace_ind], key_path_str, trace_v)
+                    vals_changed = vals_changed or val_changed
 
-                    # Update any_vals_changed status
-                    any_vals_changed = any_vals_changed or val_changed
-
-            if any_vals_changed:
+            if vals_changed:
                 restyle_changes[key_path_str] = v
 
         return restyle_changes
@@ -1830,10 +1744,12 @@ Invalid property path '{key_path_str}' for trace class {trace_class}
         -------
         list[int]
         """
+        # Avoid re-creating list objects multiple times
+        data_length = len(self.data)
         if trace_indexes is None:
-            trace_indexes = list(range(len(self.data)))
+            return list(range(data_length))
         if not isinstance(trace_indexes, (list, tuple)):
-            trace_indexes = [trace_indexes]
+            return [trace_indexes]
         return list(trace_indexes)
 
     @staticmethod
@@ -2645,25 +2561,20 @@ Please use the add_trace method with the row and col parameters.
             Subset of relayout_data including only the keys / values that
             resulted in a change to the figure's layout data
         """
-        # Initialize relayout changes
-        # ---------------------------
-        # This will be a subset of the relayout_data including only the
-        # keys / values that are changed in the figure's layout data
         relayout_changes = {}
+        is_key_path_compatible = BaseFigure._is_key_path_compatible
+        layout = self.layout
+        set_in = BaseFigure._set_in
 
-        # Process each key
-        # ----------------
         for key_path_str, v in relayout_data.items():
-            if not BaseFigure._is_key_path_compatible(key_path_str, self.layout):
+            if not is_key_path_compatible(key_path_str, layout):
                 raise ValueError(
                     """
 Invalid property path '{key_path_str}' for layout
 """.format(key_path_str=key_path_str)
                 )
 
-            # Apply set operation on the layout dict
-            val_changed = BaseFigure._set_in(self._layout, key_path_str, v)
-
+            val_changed = set_in(self._layout, key_path_str, v)
             if val_changed:
                 relayout_changes[key_path_str] = v
 
@@ -2951,31 +2862,17 @@ Invalid property path '{key_path_str}' for layout
     def _perform_plotly_update(
         self, restyle_data=None, relayout_data=None, trace_indexes=None
     ):
-        # Check for early exist
-        # ---------------------
+        # Avoid nothing-to-do overhead
         if not restyle_data and not relayout_data:
-            # Nothing to do
             return None, None, None
 
-        # Normalize input
-        # ---------------
-        if restyle_data is None:
-            restyle_data = {}
-        if relayout_data is None:
-            relayout_data = {}
+        restyle_data = restyle_data or {}
+        relayout_data = relayout_data or {}
 
         trace_indexes = self._normalize_trace_indexes(trace_indexes)
-
-        # Perform relayout
-        # ----------------
         relayout_changes = self._perform_plotly_relayout(relayout_data)
-
-        # Perform restyle
-        # ---------------
         restyle_changes = self._perform_plotly_restyle(restyle_data, trace_indexes)
 
-        # Return changes
-        # --------------
         return restyle_changes, relayout_changes, trace_indexes
 
     # Plotly message stubs
