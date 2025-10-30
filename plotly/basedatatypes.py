@@ -4342,10 +4342,6 @@ class BasePlotlyType(object):
 
         self._validate = True
 
-        # Validate inputs
-        # ---------------
-        self._process_kwargs(**kwargs)
-
         # Store params
         # ------------
         self._plotly_name = plotly_name
@@ -4380,6 +4376,10 @@ class BasePlotlyType(object):
 
         # ### Backing property for backward compatible _validator property ##
         self.__validators = None
+
+        # Validate inputs
+        # ---------------
+        self._process_kwargs(**kwargs)
 
     # @property
     # def _validate(self):
@@ -5220,15 +5220,16 @@ class BasePlotlyType(object):
         KeyError
             If key is not in object and no dflt argument specified
         """
-        # Handle default
-        if key not in self and args:
-            return args[0]
-        elif key in self:
-            val = self[key]
-            self[key] = None
-            return val
-        else:
-            raise KeyError(key)
+        # Fast path: check once for key containment and cache result.
+        present = key in self
+        if not present:
+            if args:
+                return args[0]
+            else:
+                raise KeyError(key)
+        val = self[key]
+        self[key] = None
+        return val
 
     @property
     def _in_batch_mode(self):
