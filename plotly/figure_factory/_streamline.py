@@ -112,12 +112,10 @@ def create_streamline(
     validate_streamline(x, y)
     utils.validate_positive_scalars(density=density, arrow_scale=arrow_scale)
 
-    streamline_x, streamline_y = _Streamline(
-        x, y, u, v, density, angle, arrow_scale
-    ).sum_streamlines()
-    arrow_x, arrow_y = _Streamline(
-        x, y, u, v, density, angle, arrow_scale
-    ).get_streamline_arrows()
+    # Only create a single _Streamline instance to avoid redundant computation
+    streamline_obj = _Streamline(x, y, u, v, density, angle, arrow_scale)
+    streamline_x, streamline_y = streamline_obj.sum_streamlines()
+    arrow_x, arrow_y = streamline_obj.get_streamline_arrows()
 
     streamline = graph_objs.Scatter(
         x=streamline_x + arrow_x, y=streamline_y + arrow_y, mode="lines", **kwargs
@@ -164,8 +162,7 @@ class _Streamline(object):
         self.st_x = []
         self.st_y = []
         self.get_streamlines()
-        streamline_x, streamline_y = self.sum_streamlines()
-        arrows_x, arrows_y = self.get_streamline_arrows()
+        # streamlined_x and y, arrows_x and y assigned in methods below if needed
 
     def blank_pos(self, xi, yi):
         """
@@ -331,19 +328,24 @@ class _Streamline(object):
         :rtype (list, list) arrows_x: x-values to create arrowhead and
             arrows_y: y-values to create arrowhead
         """
-        arrow_end_x = np.empty((len(self.st_x)))
-        arrow_end_y = np.empty((len(self.st_y)))
-        arrow_start_x = np.empty((len(self.st_x)))
-        arrow_start_y = np.empty((len(self.st_y)))
-        for index in range(len(self.st_x)):
-            arrow_end_x[index] = self.st_x[index][int(len(self.st_x[index]) / 3)]
-            arrow_start_x[index] = self.st_x[index][
-                (int(len(self.st_x[index]) / 3)) - 1
-            ]
-            arrow_end_y[index] = self.st_y[index][int(len(self.st_y[index]) / 3)]
-            arrow_start_y[index] = self.st_y[index][
-                (int(len(self.st_y[index]) / 3)) - 1
-            ]
+        n_streamlines = len(self.st_x)
+        # Use NumPy arrays for slicing efficiency and reduce python loop overhead
+        st_x = np.array([stream for stream in self.st_x], dtype=object)
+        st_y = np.array([stream for stream in self.st_y], dtype=object)
+
+        third_idx = np.array([int(len(x) / 3) for x in st_x])
+        end_idx = third_idx
+        start_idx = third_idx - 1
+
+        arrow_end_x = np.empty(n_streamlines)
+        arrow_end_y = np.empty(n_streamlines)
+        arrow_start_x = np.empty(n_streamlines)
+        arrow_start_y = np.empty(n_streamlines)
+        for idx in range(n_streamlines):
+            arrow_end_x[idx] = st_x[idx][end_idx[idx]]
+            arrow_start_x[idx] = st_x[idx][start_idx[idx]]
+            arrow_end_y[idx] = st_y[idx][end_idx[idx]]
+            arrow_start_y[idx] = st_y[idx][start_idx[idx]]
 
         dif_x = arrow_end_x - arrow_start_x
         dif_y = arrow_end_y - arrow_start_y
@@ -361,35 +363,43 @@ class _Streamline(object):
         seg2_x = np.cos(ang2) * self.arrow_scale
         seg2_y = np.sin(ang2) * self.arrow_scale
 
-        point1_x = np.empty((len(dif_x)))
-        point1_y = np.empty((len(dif_y)))
-        point2_x = np.empty((len(dif_x)))
-        point2_y = np.empty((len(dif_y)))
+        # Vectorize conditional append for the arrow points
+        mask = dif_x >= 0
+        point1_x = np.where(mask, arrow_end_x - seg1_x, arrow_end_x + seg1_x)
+        point1_y = np.where(mask, arrow_end_y - seg1_y, arrow_end_y + seg1_y)
+        point2_x = np.where(mask, arrow_end_x - seg2_x, arrow_end_x + seg2_x)
+        point2_y = np.where(mask, arrow_end_y - seg2_y, arrow_end_y + seg2_y)
 
-        for index in range(len(dif_x)):
-            if dif_x[index] >= 0:
-                point1_x[index] = arrow_end_x[index] - seg1_x[index]
-                point1_y[index] = arrow_end_y[index] - seg1_y[index]
-                point2_x[index] = arrow_end_x[index] - seg2_x[index]
-                point2_y[index] = arrow_end_y[index] - seg2_y[index]
-            else:
-                point1_x[index] = arrow_end_x[index] + seg1_x[index]
-                point1_y[index] = arrow_end_y[index] + seg1_y[index]
-                point2_x[index] = arrow_end_x[index] + seg2_x[index]
-                point2_y[index] = arrow_end_y[index] + seg2_y[index]
-
-        space = np.empty((len(point1_x)))
-        space[:] = np.nan
+        space = np.full(n_streamlines, np.nan)
 
         # Combine arrays into array
-        arrows_x = np.array([point1_x, arrow_end_x, point2_x, space])
-        arrows_x = arrows_x.flatten("F")
-        arrows_x = arrows_x.tolist()
+        arrows_x = (
+            np.concatenate(
+                [
+                    point1_x[:, None],
+                    arrow_end_x[:, None],
+                    point2_x[:, None],
+                    space[:, None],
+                ],
+                axis=1,
+            )
+            .reshape(-1, order="F")
+            .tolist()
+        )
 
-        # Combine arrays into array
-        arrows_y = np.array([point1_y, arrow_end_y, point2_y, space])
-        arrows_y = arrows_y.flatten("F")
-        arrows_y = arrows_y.tolist()
+        arrows_y = (
+            np.concatenate(
+                [
+                    point1_y[:, None],
+                    arrow_end_y[:, None],
+                    point2_y[:, None],
+                    space[:, None],
+                ],
+                axis=1,
+            )
+            .reshape(-1, order="F")
+            .tolist()
+        )
 
         return arrows_x, arrows_y
 
@@ -401,6 +411,7 @@ class _Streamline(object):
             combined into single list and streamline_y: all y values for each
             streamline combined into single list
         """
-        streamline_x = sum(self.st_x, [])
-        streamline_y = sum(self.st_y, [])
+        # Flatten list of lists using list comprehension (O(N) not O(N^2))
+        streamline_x = [x for sublist in self.st_x for x in sublist]
+        streamline_y = [y for sublist in self.st_y for y in sublist]
         return streamline_x, streamline_y
