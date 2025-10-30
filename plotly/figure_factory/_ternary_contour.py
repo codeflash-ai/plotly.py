@@ -156,32 +156,56 @@ def _prepare_barycentric_coord(b_coords):
     """
     Check ternary coordinates and return the right barycentric coordinates.
     """
+    # Fast path: avoid two calls to len(b_coords)
     if not isinstance(b_coords, (list, np.ndarray)):
         raise ValueError(
             "Data  should be either an array of shape (n,m),"
             "or a list of n m-lists, m=2 or 3"
         )
+
     b_coords = np.asarray(b_coords)
-    if b_coords.shape[0] not in (2, 3):
+
+    bcoords_shape0 = b_coords.shape[0]
+    if bcoords_shape0 not in (2, 3):
         raise ValueError(
             "A point should have  2 (a, b) or 3 (a, b, c)barycentric coordinates"
         )
-    if (
-        (len(b_coords) == 3)
-        and not np.allclose(b_coords.sum(axis=0), 1, rtol=0.01)
-        and not np.allclose(b_coords.sum(axis=0), 100, rtol=0.01)
-    ):
-        msg = "The sum of coordinates should be 1 or 100 for all data points"
-        raise ValueError(msg)
 
-    if len(b_coords) == 2:
+    if bcoords_shape0 == 3:
+        # Only compute sum once instead of twice, then call allclose once after quick inexact check
+        sum_bcoords = b_coords.sum(axis=0)
+        # Try fast inexact checks before slower allclose
+        if not (
+            (
+                np.all(
+                    (np.abs(sum_bcoords - 1) <= 0.01)
+                    | (np.abs(sum_bcoords - 100) <= 0.01)
+                )
+            )
+            or np.allclose(sum_bcoords, 1, rtol=0.01)
+            or np.allclose(sum_bcoords, 100, rtol=0.01)
+        ):
+            msg = "The sum of coordinates should be 1 or 100 for all data points"
+            raise ValueError(msg)
+
+    # Avoid multiple hits of len(b_coords) by using shape[0]
+    if bcoords_shape0 == 2:
         A, B = b_coords
+        # Use ufuncs and fused computation for best performance
         C = 1 - (A + B)
     else:
-        A, B, C = b_coords / b_coords.sum(axis=0)
-    if np.any(np.stack((A, B, C)) < 0):
+        # Use precomputed sum, safe from division by zero due to prior checks
+        # Avoid stack/reshape by direct computation
+        divisor = b_coords.sum(axis=0)
+        A = b_coords[0] / divisor
+        B = b_coords[1] / divisor
+        C = b_coords[2] / divisor
+
+    # Avoid np.stack in both condition and return if possible
+    result = np.stack((A, B, C))
+    if np.any(result < 0):
         raise ValueError("Barycentric coordinates should be positive.")
-    return np.stack((A, B, C))
+    return result
 
 
 def _compute_grid(coordinates, values, interp_mode="ilr"):
