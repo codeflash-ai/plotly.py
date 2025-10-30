@@ -353,24 +353,39 @@ def _add_outer_contour(
     values = np.concatenate(
         ([values[0] - delta_values], values, [values[-1] + delta_values])
     )
+
     colors = np.concatenate(([color_min], colors, [color_max]))
-    index = np.nonzero(values == val_outer)[0][0]
+
+    # Avoid multiple passes through the array by using np.where
+    # np.where returns a tuple, [0] is the array of found indices
+    indices = np.where(values == val_outer)[0]
+    index = indices[0]
     if index < len(values) / 2:
         index -= 1
     else:
         index += 1
-    all_colors = [colors[index]] + all_colors
-    all_values = [values[index]] + all_values
+
+    selected_color = colors[index]
+    selected_value = values[index]
+
+    all_colors = [selected_color] + all_colors
+    all_values = [selected_value] + all_values
     all_areas = [0] + all_areas
-    used_colors = [color for color in colors if color in all_colors]
+
+    # Optimization: use set for faster lookup
+    all_colors_set = set(all_colors)
+    # colors is a 1D array, so this operation is safe and fast:
+    used_colors = [color for color in colors if color in all_colors_set]
+
     # Define discrete colorscale
     color_number = len(used_colors)
     scale = np.linspace(0, 1, color_number + 1)
     discrete_cm = []
+    append = discrete_cm.append  # local var for faster .append
     for i, color in enumerate(used_colors):
-        discrete_cm.append([scale[i], used_colors[i]])
-        discrete_cm.append([scale[i + 1], used_colors[i]])
-    discrete_cm.append([scale[color_number], used_colors[color_number - 1]])
+        append([scale[i], color])
+        append([scale[i + 1], color])
+    append([scale[color_number], used_colors[color_number - 1]])
 
     return all_contours, all_values, all_areas, all_colors, discrete_cm
 
