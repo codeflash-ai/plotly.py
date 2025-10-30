@@ -5,6 +5,8 @@ import narwhals.stable.v1 as nw
 import numpy as np
 import warnings
 
+_RAD_TO_DEG = 180.0 / np.pi
+
 
 def _project_latlon_to_wgs84(lat, lon):
     """
@@ -19,8 +21,8 @@ def _project_wgs84_to_latlon(x, y):
     """
     Projects WGS84 to lat and lon, used to get regular hexagons on a mapbox map
     """
-    lon = x * 180 / np.pi
-    lat = (2 * np.arctan(np.exp(y)) - np.pi / 2) * 180 / np.pi
+    lon = x * _RAD_TO_DEG
+    lat = (2 * np.arctan(np.exp(y)) - np.pi / 2) * _RAD_TO_DEG
     return lat, lon
 
 
