@@ -1,4 +1,5 @@
 from collections.abc import Sequence
+from itertools import chain
 
 from plotly import exceptions
 
@@ -101,7 +102,7 @@ def flatten(array):
     :rtype (list): The flattened list.
     """
     try:
-        return [item for sublist in array for item in sublist]
+        return list(chain.from_iterable(array))
     except TypeError:
         raise exceptions.PlotlyError(
             "Your data array could not be "
