@@ -22,11 +22,11 @@ def _vectorize_zvalue(z, mode="max"):
     if z is None:
         return z
     elif np.isscalar(z):
-        return [z] * 3 + [alpha]
+        return [z, z, z, alpha]
     elif len(z) == 1:
-        return list(z) * 3 + [alpha]
+        return [z[0], z[0], z[0], alpha]
     elif len(z) == 3:
-        return list(z) + [alpha]
+        return [z[0], z[1], z[2], alpha]
     elif len(z) == 4:
         return z
     else:
