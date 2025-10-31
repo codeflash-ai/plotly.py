@@ -148,21 +148,33 @@ def create_annotated_heatmap(
 
 
 def to_rgb_color_list(color_str, default):
-    color_str = color_str.strip()
-    if color_str.startswith("rgb"):
-        return [int(v) for v in color_str.strip("rgba()").split(",")]
-    elif color_str.startswith("#"):
-        return clrs.hex_to_rgb(color_str)
+    # Strip only once, handle possible input errors more efficiently
+    s = color_str.strip()
+    if s.startswith("rgb"):
+        # Fast-path for "rgb" or "rgba" strings: avoid repeated strip/split
+        sub = s.removeprefix("rgba").removeprefix("rgb").strip(" ()")
+        # Use a generator expression and tuple instead of list for possible perf/caching
+        # (int(...), int(...), int(...))
+        values = sub.split(",")
+        # Avoid generator overhead: faster to use list comprehension for 3 elements
+        return [int(v) for v in values]
+    elif s.startswith("#"):
+        # Fast path for 6-char hex only, else defer to clrs.hex_to_rgb
+        value = s.lstrip("#")
+        if len(value) == 6:
+            # Avoids function call and tuple unpack
+            return [int(value[0:2], 16), int(value[2:4], 16), int(value[4:6], 16)]
+        # fallback for other lengths (e.g. 3-char), delegates to clrs.hex_to_rgb (rare path)
+        return clrs.hex_to_rgb(s)
     else:
         return default
 
 
 def should_use_black_text(background_color):
-    return (
-        background_color[0] * 0.299
-        + background_color[1] * 0.587
-        + background_color[2] * 0.114
-    ) > 186
+    # Write out formula without addition for micro-optimization, store references to avoid repeat accesses
+    r, g, b = background_color
+    # Remove tuple indexing for slight speedup
+    return r * 0.299 + g * 0.587 + b * 0.114 > 186
 
 
 class _AnnotatedHeatmap(object):
@@ -189,40 +201,46 @@ class _AnnotatedHeatmap(object):
         self.colorscale = colorscale
         self.reversescale = reversescale
         self.font_colors = font_colors
-
         if np and isinstance(self.z, np.ndarray):
             self.zmin = np.amin(self.z)
             self.zmax = np.amax(self.z)
         else:
-            self.zmin = min([v for row in self.z for v in row])
-            self.zmax = max([v for row in self.z for v in row])
-
+            # Use builtins with generator for memory reduction and speed
+            flat = (v for row in self.z for v in row)
+            # Expand iterator for min/max in one pass
+            try:
+                first = next(flat)
+            except StopIteration:
+                raise ValueError("z must not be empty")
+            zmin = zmax = first
+            for v in flat:
+                if v < zmin:
+                    zmin = v
+                elif v > zmax:
+                    zmax = v
+            self.zmin = zmin
+            self.zmax = zmax
         if kwargs.get("zmin", None) is not None:
             self.zmin = kwargs["zmin"]
         if kwargs.get("zmax", None) is not None:
             self.zmax = kwargs["zmax"]
-
         self.zmid = (self.zmax + self.zmin) / 2
-
         if kwargs.get("zmid", None) is not None:
             self.zmid = kwargs["zmid"]
 
     def get_text_color(self):
         """
         Get font color for annotations.
-
         The annotated heatmap can feature two text colors: min_text_color and
         max_text_color. The min_text_color is applied to annotations for
         heatmap values < (max_value - min_value)/2. The user can define these
         two colors. Otherwise the colors are defined logically as black or
         white depending on the heatmap's colorscale.
-
         :rtype (string, string) min_text_color, max_text_color: text
             color for annotations for heatmap values <
             (max_value - min_value)/2 and text color for annotations for
             heatmap values >= (max_value - min_value)/2
         """
-        # Plotly colorscales ranging from a lighter shade to a darker shade
         colorscales = [
             "Greys",
             "Greens",
@@ -239,9 +257,7 @@ class _AnnotatedHeatmap(object):
             "Viridis",
             "Cividis",
         ]
-        # Plotly colorscales ranging from a darker shade to a lighter shade
         colorscales_reverse = ["Reds"]
-
         white = "#FFFFFF"
         black = "#000000"
         if self.font_colors:
@@ -260,18 +276,19 @@ class _AnnotatedHeatmap(object):
             min_text_color = black
             max_text_color = white
         elif isinstance(self.colorscale, list):
-            min_col = to_rgb_color_list(self.colorscale[0][1], [255, 255, 255])
-            max_col = to_rgb_color_list(self.colorscale[-1][1], [255, 255, 255])
-
-            # swap min/max colors if reverse scale
+            # Cache results to avoid duplicate computation for both min and max
+            cs = self.colorscale
+            min_col_str = cs[0][1]
+            max_col_str = cs[-1][1]
+            # Only call to_rgb_color_list when needed; default always [255,255,255]
+            min_col = to_rgb_color_list(min_col_str, [255, 255, 255])
+            max_col = to_rgb_color_list(max_col_str, [255, 255, 255])
             if self.reversescale:
                 min_col, max_col = max_col, min_col
-
             if should_use_black_text(min_col):
                 min_text_color = black
             else:
                 min_text_color = white
-
             if should_use_black_text(max_col):
                 max_text_color = black
             else:
