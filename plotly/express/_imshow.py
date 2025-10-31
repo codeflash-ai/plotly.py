@@ -42,7 +42,12 @@ def _infer_zmax_from_type(img):
     if dt in _integer_types:
         return _integer_ranges[dt][1]
     else:
-        im_max = img[np.isfinite(img)].max()
+        img_flat = img.ravel()
+        mask = np.isfinite(img_flat)
+        if np.all(mask):
+            im_max = img_flat.max()
+        else:
+            im_max = img_flat[mask].max()
         if im_max <= 1 * rtol:
             return 1
         elif im_max <= 255 * rtol:
