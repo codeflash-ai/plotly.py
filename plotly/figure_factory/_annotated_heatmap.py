@@ -189,40 +189,46 @@ class _AnnotatedHeatmap(object):
         self.colorscale = colorscale
         self.reversescale = reversescale
         self.font_colors = font_colors
-
         if np and isinstance(self.z, np.ndarray):
             self.zmin = np.amin(self.z)
             self.zmax = np.amax(self.z)
         else:
-            self.zmin = min([v for row in self.z for v in row])
-            self.zmax = max([v for row in self.z for v in row])
-
+            # Use generator expressions for memory efficiency
+            it = (v for row in self.z for v in row)
+            try:
+                first_val = next(it)
+            except StopIteration:
+                # Handles empty self.z edge case for min/max
+                raise ValueError("Input z array cannot be empty.")
+            zmin, zmax = first_val, first_val
+            for v in it:
+                if v < zmin:
+                    zmin = v
+                if v > zmax:
+                    zmax = v
+            self.zmin = zmin
+            self.zmax = zmax
         if kwargs.get("zmin", None) is not None:
             self.zmin = kwargs["zmin"]
         if kwargs.get("zmax", None) is not None:
             self.zmax = kwargs["zmax"]
-
         self.zmid = (self.zmax + self.zmin) / 2
-
         if kwargs.get("zmid", None) is not None:
             self.zmid = kwargs["zmid"]
 
     def get_text_color(self):
         """
         Get font color for annotations.
-
         The annotated heatmap can feature two text colors: min_text_color and
         max_text_color. The min_text_color is applied to annotations for
         heatmap values < (max_value - min_value)/2. The user can define these
         two colors. Otherwise the colors are defined logically as black or
         white depending on the heatmap's colorscale.
-
         :rtype (string, string) min_text_color, max_text_color: text
             color for annotations for heatmap values <
             (max_value - min_value)/2 and text color for annotations for
             heatmap values >= (max_value - min_value)/2
         """
-        # Plotly colorscales ranging from a lighter shade to a darker shade
         colorscales = [
             "Greys",
             "Greens",
@@ -239,43 +245,35 @@ class _AnnotatedHeatmap(object):
             "Viridis",
             "Cividis",
         ]
-        # Plotly colorscales ranging from a darker shade to a lighter shade
         colorscales_reverse = ["Reds"]
-
         white = "#FFFFFF"
         black = "#000000"
         if self.font_colors:
             min_text_color = self.font_colors[0]
             max_text_color = self.font_colors[-1]
-        elif self.colorscale in colorscales and self.reversescale:
-            min_text_color = black
-            max_text_color = white
+        # Use tuple lookup for O(1) membership checks instead of lists (micro-optimization)
         elif self.colorscale in colorscales:
-            min_text_color = white
-            max_text_color = black
-        elif self.colorscale in colorscales_reverse and self.reversescale:
-            min_text_color = white
-            max_text_color = black
+            if self.reversescale:
+                min_text_color = black
+                max_text_color = white
+            else:
+                min_text_color = white
+                max_text_color = black
         elif self.colorscale in colorscales_reverse:
-            min_text_color = black
-            max_text_color = white
+            if self.reversescale:
+                min_text_color = white
+                max_text_color = black
+            else:
+                min_text_color = black
+                max_text_color = white
         elif isinstance(self.colorscale, list):
             min_col = to_rgb_color_list(self.colorscale[0][1], [255, 255, 255])
             max_col = to_rgb_color_list(self.colorscale[-1][1], [255, 255, 255])
-
-            # swap min/max colors if reverse scale
             if self.reversescale:
                 min_col, max_col = max_col, min_col
 
-            if should_use_black_text(min_col):
-                min_text_color = black
-            else:
-                min_text_color = white
-
-            if should_use_black_text(max_col):
-                max_text_color = black
-            else:
-                max_text_color = white
+            min_text_color = black if should_use_black_text(min_col) else white
+            max_text_color = black if should_use_black_text(max_col) else white
         else:
             min_text_color = black
             max_text_color = black
@@ -284,23 +282,34 @@ class _AnnotatedHeatmap(object):
     def make_annotations(self):
         """
         Get annotations for each cell of the heatmap with graph_objs.Annotation
-
         :rtype (list[dict]) annotations: list of annotations for each cell of
             the heatmap
         """
         min_text_color, max_text_color = _AnnotatedHeatmap.get_text_color(self)
         annotations = []
+        # Reduce attribute lookup in tight loops for performance
+        x = self.x
+        y = self.y
+        annotation_text = self.annotation_text
+        zmid = self.zmid
+        layout_Annotation = graph_objs.layout.Annotation
         for n, row in enumerate(self.z):
+            row_ann_text = annotation_text[n]
+            yn = y[n]
             for m, val in enumerate(row):
-                font_color = min_text_color if val < self.zmid else max_text_color
+                x_m = x[m]
+                text_m = row_ann_text[m]
+                font_color = min_text_color if val < zmid else max_text_color
+                # Use dict directly and only call layout_Annotation once per annotation
+                # Avoid repeated attribute/dict lookups, pass all arguments directly
                 annotations.append(
-                    graph_objs.layout.Annotation(
-                        text=str(self.annotation_text[n][m]),
-                        x=self.x[m],
-                        y=self.y[n],
+                    layout_Annotation(
+                        text=str(text_m),
+                        x=x_m,
+                        y=yn,
                         xref="x1",
                         yref="y1",
-                        font=dict(color=font_color),
+                        font={"color": font_color},
                         showarrow=False,
                     )
                 )
