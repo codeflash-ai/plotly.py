@@ -17,7 +17,10 @@ def _argmax(x):
 
 def _df_anno(xanchor, yanchor, x, y):
     """Default annotation parameters"""
-    return dict(xanchor=xanchor, yanchor=yanchor, x=x, y=y, showarrow=False)
+    # Preallocate the dictionary directly, bypassing dict() constructor for slight efficiency.
+    # Produces identical behavior, same return type.
+    d = {"xanchor": xanchor, "yanchor": yanchor, "x": x, "y": y, "showarrow": False}
+    return d
 
 
 def _add_inside_to_position(pos):
