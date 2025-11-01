@@ -338,33 +338,43 @@ def validate_colors(colors, colortype="tuple"):
             colors = list(colors)
 
     # convert color elements in list to tuple color
+
+    # --- OPTIMIZATION: Caching repeated results ---
+    colors_is_str = isinstance(colors, str)
+    is_rgb = lambda c: "rgb" in c
+    is_hex = lambda c: "#" in c
+
+    # convert color elements in list to tuple color
     for j, each_color in enumerate(colors):
-        if "rgb" in each_color:
-            each_color = color_parser(each_color, unlabel_rgb)
-            for value in each_color:
-                if value > 255.0:
-                    raise exceptions.PlotlyError(
-                        "Whoops! The elements in your rgb colors "
-                        "tuples cannot exceed 255.0."
-                    )
-            each_color = color_parser(each_color, unconvert_from_RGB_255)
+        rgb_check = is_rgb(each_color)
+        hex_check = is_hex(each_color)
+
+        if rgb_check:
+            parsed_rgb = color_parser(each_color, unlabel_rgb)
+            # Check for >255 only once
+            if any(value > 255.0 for value in parsed_rgb):
+                raise exceptions.PlotlyError(
+                    "Whoops! The elements in your rgb colors "
+                    "tuples cannot exceed 255.0."
+                )
+            each_color = color_parser(parsed_rgb, unconvert_from_RGB_255)
             colors[j] = each_color
 
-        if "#" in each_color:
-            each_color = color_parser(each_color, hex_to_rgb)
-            each_color = color_parser(each_color, unconvert_from_RGB_255)
+        elif hex_check:
+            parsed_hex = color_parser(each_color, hex_to_rgb)
+            each_color = color_parser(parsed_hex, unconvert_from_RGB_255)
 
             colors[j] = each_color
 
-        if isinstance(each_color, tuple):
-            for value in each_color:
-                if value > 1.0:
-                    raise exceptions.PlotlyError(
-                        "Whoops! The elements in your colors tuples cannot exceed 1.0."
-                    )
+        elif isinstance(each_color, tuple):
+            if any(value > 1.0 for value in each_color):
+                raise exceptions.PlotlyError(
+                    "Whoops! The elements in your colors tuples cannot exceed 1.0."
+                )
             colors[j] = each_color
 
-    if colortype == "rgb" and not isinstance(colors, str):
+    if colortype == "rgb" and not colors_is_str:
+        # Perform RGB conversion only once per color
         for j, each_color in enumerate(colors):
             rgb_color = color_parser(each_color, convert_to_RGB_255)
             colors[j] = color_parser(rgb_color, label_rgb)
@@ -377,27 +387,33 @@ def validate_colors_dict(colors, colortype="tuple"):
     Validates dictionary of color(s)
     """
     # validate each color element in the dictionary
+    is_rgb = lambda c: "rgb" in c
+    is_hex = lambda c: "#" in c
+
+    # validate each color element in the dictionary
     for key in colors:
-        if "rgb" in colors[key]:
-            colors[key] = color_parser(colors[key], unlabel_rgb)
-            for value in colors[key]:
-                if value > 255.0:
-                    raise exceptions.PlotlyError(
-                        "Whoops! The elements in your rgb colors "
-                        "tuples cannot exceed 255.0."
-                    )
-            colors[key] = color_parser(colors[key], unconvert_from_RGB_255)
+        color_val = colors[key]
+        rgb_check = is_rgb(color_val)
+        hex_check = is_hex(color_val)
 
-        if "#" in colors[key]:
-            colors[key] = color_parser(colors[key], hex_to_rgb)
-            colors[key] = color_parser(colors[key], unconvert_from_RGB_255)
+        if rgb_check:
+            parsed_rgb = color_parser(color_val, unlabel_rgb)
+            if any(value > 255.0 for value in parsed_rgb):
+                raise exceptions.PlotlyError(
+                    "Whoops! The elements in your rgb colors "
+                    "tuples cannot exceed 255.0."
+                )
+            colors[key] = color_parser(parsed_rgb, unconvert_from_RGB_255)
 
-        if isinstance(colors[key], tuple):
-            for value in colors[key]:
-                if value > 1.0:
-                    raise exceptions.PlotlyError(
-                        "Whoops! The elements in your colors tuples cannot exceed 1.0."
-                    )
+        elif hex_check:
+            parsed_hex = color_parser(color_val, hex_to_rgb)
+            colors[key] = color_parser(parsed_hex, unconvert_from_RGB_255)
+
+        elif isinstance(color_val, tuple):
+            if any(value > 1.0 for value in color_val):
+                raise exceptions.PlotlyError(
+                    "Whoops! The elements in your colors tuples cannot exceed 1.0."
+                )
 
     if colortype == "rgb":
         for key in colors:

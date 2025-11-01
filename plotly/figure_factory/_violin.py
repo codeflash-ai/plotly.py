@@ -159,14 +159,17 @@ def violinplot(vals, fillcolor="#1f77b4", rugplot=True):
     Refer to FigureFactory.create_violin() for docstring.
     """
     vals = np.asarray(vals, float)
-    #  summary statistics
-    vals_min = calc_stats(vals)["min"]
-    vals_max = calc_stats(vals)["max"]
-    q1 = calc_stats(vals)["q1"]
-    q2 = calc_stats(vals)["q2"]
-    q3 = calc_stats(vals)["q3"]
-    d1 = calc_stats(vals)["d1"]
-    d2 = calc_stats(vals)["d2"]
+    # summary statistics
+    stats = calc_stats(vals)
+    vals_min = stats["min"]
+    vals_max = stats["max"]
+    q1 = stats["q1"]
+    q2 = stats["q2"]
+    q3 = stats["q3"]
+    d1 = stats["d1"]
+    d2 = stats["d2"]
+
+    # kernel density estimation of pdf
 
     # kernel density estimation of pdf
     pdf = scipy_stats.gaussian_kde(vals)
@@ -212,12 +215,8 @@ def violin_no_colorscale(
     Returns fig for violin plot without colorscale.
 
     """
-
-    # collect all group names
-    group_name = []
-    for name in data[group_header]:
-        if name not in group_name:
-            group_name.append(name)
+    # collect all group names (O(n) time, less membership checks)
+    group_name = _unique_group_names(data, group_header)
     if sort:
         group_name.sort()
 
@@ -228,8 +227,11 @@ def violin_no_colorscale(
         rows=1, cols=L, shared_yaxes=True, horizontal_spacing=0.025, print_grid=False
     )
     color_index = 0
-    for k, gr in enumerate(group_name):
-        vals = np.asarray(gb.get_group(gr)[data_header], float)
+    # Cache group data and np.asarray
+    group_arrays = [
+        np.asarray(gb.get_group(gr)[data_header], float) for gr in group_name
+    ]
+    for k, (gr, vals) in enumerate(zip(group_name, group_arrays)):
         if color_index >= len(colors):
             color_index = 0
         plot_data, plot_xrange = violinplot(
@@ -277,12 +279,7 @@ def violin_colorscale(
     Returns fig for violin plot with colorscale.
 
     """
-
-    # collect all group names
-    group_name = []
-    for name in data[group_header]:
-        if name not in group_name:
-            group_name.append(name)
+    group_name = _unique_group_names(data, group_header)
     if sort:
         group_name.sort()
 
@@ -307,15 +304,16 @@ def violin_colorscale(
     highcolor = clrs.color_parser(colors[1], clrs.unlabel_rgb)
 
     # find min and max values in group_stats
-    group_stats_values = []
-    for key in group_stats:
-        group_stats_values.append(group_stats[key])
+    group_stats_values = list(group_stats.values())
 
     max_value = max(group_stats_values)
     min_value = min(group_stats_values)
-
-    for k, gr in enumerate(group_name):
-        vals = np.asarray(gb.get_group(gr)[data_header], float)
+    # Precompute np arrays for each group
+    group_arrays = [
+        np.asarray(gb.get_group(gr)[data_header], float) for gr in group_name
+    ]
+    for k, (gr, vals) in enumerate(zip(group_name, group_arrays)):
+        # find intermediate color from colorscale
 
         # find intermediate color from colorscale
         intermed = (group_stats[gr] - min_value) / (max_value - min_value)
@@ -378,12 +376,7 @@ def violin_dict(
     Returns fig for violin plot without colorscale.
 
     """
-
-    # collect all group names
-    group_name = []
-    for name in data[group_header]:
-        if name not in group_name:
-            group_name.append(name)
+    group_name = _unique_group_names(data, group_header)
 
     if sort:
         group_name.sort()
@@ -404,8 +397,10 @@ def violin_dict(
         rows=1, cols=L, shared_yaxes=True, horizontal_spacing=0.025, print_grid=False
     )
 
-    for k, gr in enumerate(group_name):
-        vals = np.asarray(gb.get_group(gr)[data_header], float)
+    group_arrays = [
+        np.asarray(gb.get_group(gr)[data_header], float) for gr in group_name
+    ]
+    for k, (gr, vals) in enumerate(zip(group_name, group_arrays)):
         plot_data, plot_xrange = violinplot(vals, fillcolor=colors[gr], rugplot=rugplot)
         for item in plot_data:
             fig.append_trace(item, 1, k + 1)
@@ -702,3 +697,14 @@ def create_violin(
                 title,
             )
             return fig
+
+
+def _unique_group_names(data, group_header):
+    # Fast unique extraction preserving order
+    seen = set()
+    group_names = []
+    for name in data[group_header]:
+        if name not in seen:
+            seen.add(name)
+            group_names.append(name)
+    return group_names
