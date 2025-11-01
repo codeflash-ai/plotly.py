@@ -225,8 +225,9 @@ class _Candlestick(object):
         if dates is not None:
             self.x = dates
         else:
-            self.x = [x for x in range(len(self.open))]
-        self.get_candle_increase()
+            # Use range directly instead of list comprehension, saves memory and is faster
+            self.x = range(len(self.open))
+        # Removed unnecessary call to self.get_candle_increase(), as it has no side effects here
 
     def get_candle_increase(self):
         """
@@ -260,18 +261,40 @@ class _Candlestick(object):
         and decreasing when the close value <= open value.
         """
         decrease_y = []
-        decrease_x = []
-        for index in range(len(self.open)):
-            if self.close[index] <= self.open[index]:
-                decrease_y.append(self.low[index])
-                decrease_y.append(self.open[index])
-                decrease_y.append(self.close[index])
-                decrease_y.append(self.close[index])
-                decrease_y.append(self.close[index])
-                decrease_y.append(self.high[index])
-                decrease_x.append(self.x[index])
+        decrease_x_flat = []
 
-        decrease_x = [[x, x, x, x, x, x] for x in decrease_x]
-        decrease_x = utils.flatten(decrease_x)
+        # Avoid repeated attribute lookup, local variable references are faster
+        open_, high_, low_, close_, x_ = (
+            self.open,
+            self.high,
+            self.low,
+            self.close,
+            self.x,
+        )
+        append_y = decrease_y.append
+        append_x_flat = decrease_x_flat.append
 
-        return decrease_x, decrease_y
+        # Use enumerate to avoid index range lookup where possible
+        for idx, open_v in enumerate(open_):
+            close_v = close_[idx]
+            if close_v <= open_v:
+                low_v = low_[idx]
+                high_v = high_[idx]
+                x_v = x_[idx]
+                # The values for y are appended in sequence 6 times.
+                append_y(low_v)
+                append_y(open_v)
+                append_y(close_v)
+                append_y(close_v)
+                append_y(close_v)
+                append_y(high_v)
+                # Instead of building a temporary list and then flattening, extend flat x directly
+                append_x_flat(x_v)
+                append_x_flat(x_v)
+                append_x_flat(x_v)
+                append_x_flat(x_v)
+                append_x_flat(x_v)
+                append_x_flat(x_v)
+
+        # decrease_x_flat is already flattened and matches the old utils.flatten([[x,...],...])
+        return decrease_x_flat, decrease_y
