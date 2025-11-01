@@ -2,17 +2,30 @@
 
 
 def _mean(x):
-    if len(x) == 0:
+    n = len(x)
+    if n == 0:
         raise ValueError("x must have positive length")
-    return float(sum(x)) / len(x)
+    return float(sum(x)) / n
 
 
 def _argmin(x):
-    return sorted(enumerate(x), key=lambda t: t[1])[0][0]
+    min_index = 0
+    min_value = x[0]
+    for i in range(1, len(x)):
+        if x[i] < min_value:
+            min_index = i
+            min_value = x[i]
+    return min_index
 
 
 def _argmax(x):
-    return sorted(enumerate(x), key=lambda t: t[1], reverse=True)[0][0]
+    max_index = 0
+    max_value = x[0]
+    for i in range(1, len(x)):
+        if x[i] > max_value:
+            max_index = i
+            max_value = x[i]
+    return max_index
 
 
 def _df_anno(xanchor, yanchor, x, y):
@@ -30,10 +43,11 @@ def _prepare_position(position, prepend_inside=False):
     if position is None:
         position = "top right"
     pos_str = position
-    position = set(position.split(" "))
+    position_set = set(position.split(" "))
     if prepend_inside:
-        position = _add_inside_to_position(position)
-    return position, pos_str
+        # _add_inside_to_position is defined in plotly/shapeannotation.py
+        position_set = _add_inside_to_position(position_set)
+    return position_set, pos_str
 
 
 def annotation_params_for_line(shape_type, shape_args, position):
@@ -53,50 +67,64 @@ def annotation_params_for_line(shape_type, shape_args, position):
     C = "center"
     B = "bottom"
     M = "middle"
-    aY = max(Y)
-    iY = min(Y)
-    eY = _mean(Y)
-    aaY = _argmax(Y)
-    aiY = _argmin(Y)
-    aX = max(X)
-    iX = min(X)
-    eX = _mean(X)
-    aaX = _argmax(X)
-    aiX = _argmin(X)
-    position, pos_str = _prepare_position(position)
+
+    # Precompute values efficiently
+    x0, x1 = X
+    y0, y1 = Y
+
+    # Instead of using max(Y), min(Y), etc. multiple times with lists, use direct computation
+    # Also avoids recreating list for [x0, x1] or [y0, y1] during each call
+    if y0 > y1:
+        aY, aaY = y0, 0
+        iY, aiY = y1, 1
+    else:
+        aY, aaY = y1, 1
+        iY, aiY = y0, 0
+    eY = (y0 + y1) / 2.0
+
+    if x0 > x1:
+        aX, aaX = x0, 0
+        iX, aiX = x1, 1
+    else:
+        aX, aaX = x1, 1
+        iX, aiX = x0, 0
+    eX = (x0 + x1) / 2.0
+
+    position_set, pos_str = _prepare_position(position)
+
     if shape_type == "vline":
-        if position == set(["top", "left"]):
+        if position_set == {"top", "left"}:
             return _df_anno(R, T, X[aaY], aY)
-        if position == set(["top", "right"]):
+        if position_set == {"top", "right"}:
             return _df_anno(L, T, X[aaY], aY)
-        if position == set(["top"]):
+        if position_set == {"top"}:
             return _df_anno(C, B, X[aaY], aY)
-        if position == set(["bottom", "left"]):
+        if position_set == {"bottom", "left"}:
             return _df_anno(R, B, X[aiY], iY)
-        if position == set(["bottom", "right"]):
+        if position_set == {"bottom", "right"}:
             return _df_anno(L, B, X[aiY], iY)
-        if position == set(["bottom"]):
+        if position_set == {"bottom"}:
             return _df_anno(C, T, X[aiY], iY)
-        if position == set(["left"]):
+        if position_set == {"left"}:
             return _df_anno(R, M, eX, eY)
-        if position == set(["right"]):
+        if position_set == {"right"}:
             return _df_anno(L, M, eX, eY)
     elif shape_type == "hline":
-        if position == set(["top", "left"]):
+        if position_set == {"top", "left"}:
             return _df_anno(L, B, iX, Y[aiX])
-        if position == set(["top", "right"]):
+        if position_set == {"top", "right"}:
             return _df_anno(R, B, aX, Y[aaX])
-        if position == set(["top"]):
+        if position_set == {"top"}:
             return _df_anno(C, B, eX, eY)
-        if position == set(["bottom", "left"]):
+        if position_set == {"bottom", "left"}:
             return _df_anno(L, T, iX, Y[aiX])
-        if position == set(["bottom", "right"]):
+        if position_set == {"bottom", "right"}:
             return _df_anno(R, T, aX, Y[aaX])
-        if position == set(["bottom"]):
+        if position_set == {"bottom"}:
             return _df_anno(C, T, eX, eY)
-        if position == set(["left"]):
+        if position_set == {"left"}:
             return _df_anno(R, M, iX, Y[aiX])
-        if position == set(["right"]):
+        if position_set == {"right"}:
             return _df_anno(L, M, aX, Y[aaX])
     raise ValueError('Invalid annotation position "%s"' % (pos_str,))
 
