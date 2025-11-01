@@ -15137,7 +15137,11 @@ class Figure(BaseFigure):
         -------
         Figure
         """
-        from plotly.graph_objs import Scattergl
+        if not hasattr(self.__class__, "_Scattergl_cls"):
+            from plotly.graph_objs import Scattergl
+
+            self.__class__._Scattergl_cls = Scattergl
+        Scattergl = self.__class__._Scattergl_cls
 
         new_trace = Scattergl(
             connectgaps=connectgaps,
