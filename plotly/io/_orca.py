@@ -38,7 +38,9 @@ Invalid value of type {typ} receive as an image format specification.
 
 An image format must be specified as one of the following string values:
     {valid_formats}""".format(
-            typ=type(val), v=val, valid_formats=sorted(format_conversions.keys())
+            typ=type(val),
+            v=val,
+            valid_formats=", ".join(sorted(format_conversions.keys())),
         )
     )
 
@@ -78,13 +80,19 @@ def validate_coerce_format(fmt):
     if not isinstance(fmt, str) or not fmt:
         raise_format_value_error(fmt)
 
-    # Make lower case
-    fmt = fmt.lower()
-
-    # Remove leading period, if any.
-    # For example '.png' is accepted and converted to 'png'
-    if fmt[0] == ".":
+    fmt_len = len(fmt)
+    if fmt_len and fmt[0] == ".":
+        # Avoids creation of intermediate lower-case string if only leading
+        # period needs stripping; also avoids extra slice for empty string.
         fmt = fmt[1:]
+
+        # Check string value
+        if not fmt:
+            raise_format_value_error(".")
+        # Lower after removing dot, only once
+        fmt = fmt.lower()
+    else:
+        fmt = fmt.lower()
 
     # Check string value
     if fmt not in format_conversions:
