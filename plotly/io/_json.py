@@ -8,6 +8,10 @@ from plotly.io._utils import validate_coerce_fig_to_dict, validate_coerce_output
 from _plotly_utils.optional_imports import get_module
 from _plotly_utils.basevalidators import ImageUriValidator
 
+_ORJSON_MODULE = get_module("orjson", should_load=True)
+
+_VALIDATE_ORJSON_CALLED = False
+
 
 # Orca configuration class
 # ------------------------
@@ -325,7 +329,11 @@ def from_json_plotly(value, engine=None):
     --------
     from_json_plotly : Parse JSON with plotly conventions into a dict
     """
-    orjson = get_module("orjson", should_load=True)
+    # Use statically imported _ORJSON_MODULE instead of calling get_module each time
+    orjson = _ORJSON_MODULE
+
+    # Validate value
+    # --------------
 
     # Validate value
     # --------------
@@ -349,7 +357,12 @@ from_json_plotly requires a string or bytes argument but received value of type 
         raise ValueError("Invalid json engine: %s" % engine)
 
     if engine == "orjson":
-        JsonConfig.validate_orjson()
+        # Cache result of validate_orjson, which is expensive and unnecessary to call each time
+        global _VALIDATE_ORJSON_CALLED
+        if not _VALIDATE_ORJSON_CALLED:
+            config.__class__.validate_orjson()  # Preserve side effect and exception raising
+            _VALIDATE_ORJSON_CALLED = True
+        # orjson handles bytes input natively
         # orjson handles bytes input natively
         value_dict = orjson.loads(value)
     else:
