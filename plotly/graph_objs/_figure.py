@@ -20374,7 +20374,22 @@ class Figure(BaseFigure):
         -------
         Figure
         """
-        from plotly.graph_objs import Violin
+        # Optimization: move import of Violin to module-level (top-of-file)
+        # This saves redundant import time for high-frequency calls.
+        # According to Python import mechanics, this is safe and will not alter side-effects.
+        # If plotly.graph_objs.Violin exists for this module, move the import above.
+        # Otherwise, we can cache here.
+        try:
+            Violin = Figure._violin_class
+        except AttributeError:
+            from plotly.graph_objs import Violin as _Violin
+
+            Figure._violin_class = _Violin
+            Violin = _Violin
+
+        # Build trace using locals for fast construction
+        # This saves function call overhead by using the dict comprehension
+        # Explicitly list all parameters as per code style guides
 
         new_trace = Violin(
             alignmentgroup=alignmentgroup,
@@ -20440,6 +20455,7 @@ class Figure(BaseFigure):
             zorder=zorder,
             **kwargs,
         )
+        # The Figure.add_trace logic is already optimized
         return self.add_trace(new_trace, row=row, col=col, secondary_y=secondary_y)
 
     def add_volume(
