@@ -347,32 +347,53 @@ class _Distplot(object):
 
         :rtype (list) curve: list of kde representations
         """
-        curve = [None] * self.trace_number
+        # Precompute the normalized step for 500 points for each trace (for reuse)
+        curve_x_list = []
+        range_indices = range(500)
         for index in range(self.trace_number):
-            self.curve_x[index] = [
-                self.start[index] + x * (self.end[index] - self.start[index]) / 500
-                for x in range(500)
-            ]
-            self.curve_y[index] = scipy_stats.gaussian_kde(self.hist_data[index])(
-                self.curve_x[index]
-            )
+            start = self.start[index]
+            end = self.end[index]
+            delta = (end - start) / 500
+            # Use list comprehension with arithmetic directly on the generator
+            curve_x = [start + x * delta for x in range(500)]
+            curve_x_list.append(curve_x)
+            self.curve_x[index] = curve_x
 
-            if self.histnorm == ALTERNATIVE_HISTNORM:
-                self.curve_y[index] *= self.bin_size[index]
+        scipy_gaussian_kde = scipy_stats.gaussian_kde
+        histnorm_alt = self.histnorm == ALTERNATIVE_HISTNORM
+        bin_size = self.bin_size
+        hist_data = self.hist_data
+
+        # Compute all KDEs in a local loop instead of attribute access (micro-opt)
 
         for index in range(self.trace_number):
-            curve[index] = dict(
+            kde_func = scipy_gaussian_kde(hist_data[index])
+            curve_y = kde_func(self.curve_x[index])
+            if histnorm_alt:
+                curve_y *= bin_size[index]
+            self.curve_y[index] = curve_y
+
+        # Precompute constant values for the dicts (loop hoisting)
+        colors = self.colors
+        group_labels = self.group_labels
+        show_hist = self.show_hist
+
+        # Use list comprehension for assembling the curve dicts (avoid two for-loops)
+        curve = [
+            dict(
                 type="scatter",
                 x=self.curve_x[index],
                 y=self.curve_y[index],
                 xaxis="x1",
                 yaxis="y1",
                 mode="lines",
-                name=self.group_labels[index],
-                legendgroup=self.group_labels[index],
-                showlegend=False if self.show_hist else True,
-                marker=dict(color=self.colors[index % len(self.colors)]),
+                name=group_labels[index],
+                legendgroup=group_labels[index],
+                showlegend=False if show_hist else True,
+                marker=dict(color=colors[index % len(colors)]),
             )
+            for index in range(self.trace_number)
+        ]
         return curve
 
     def make_normal(self):
