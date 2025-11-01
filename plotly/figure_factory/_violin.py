@@ -68,7 +68,7 @@ def make_violin_rugplot(vals, pdf_max, distance, color="#1f77b4"):
     return graph_objs.Scatter(
         y=vals,
         x=[-pdf_max - distance] * len(vals),
-        marker=graph_objs.scatter.Marker(color=color, symbol="line-ew-open"),
+        marker={"color": color, "symbol": "line-ew-open"},
         mode="markers",
         name="",
         showlegend=False,
