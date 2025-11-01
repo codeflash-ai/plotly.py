@@ -421,21 +421,38 @@ class _Distplot(object):
 
         :rtype (list) rug: list of rug plot representations
         """
-        rug = [None] * self.trace_number
-        for index in range(self.trace_number):
-            rug[index] = dict(
-                type="scatter",
-                x=self.hist_data[index],
-                y=([self.group_labels[index]] * len(self.hist_data[index])),
-                xaxis="x1",
-                yaxis="y2",
-                mode="markers",
-                name=self.group_labels[index],
-                legendgroup=self.group_labels[index],
-                showlegend=(False if self.show_hist or self.show_curve else True),
-                text=self.rug_text[index],
-                marker=dict(
-                    color=self.colors[index % len(self.colors)], symbol="line-ns-open"
-                ),
-            )
+        # Pre-fetch self attributes into local variables for faster access
+        hist_data = self.hist_data
+        group_labels = self.group_labels
+        rug_text = self.rug_text
+        colors = self.colors
+        trace_number = self.trace_number
+        n_colors = len(colors)
+        show_hist = self.show_hist
+        show_curve = self.show_curve
+
+        rug = [None] * trace_number
+
+        # Avoid repeated attribute lookups inside loop
+        showlegend_value = False if show_hist or show_curve else True
+
+        for index in range(trace_number):
+            xdata = hist_data[index]
+            glabel = group_labels[index]
+            color = colors[index % n_colors]
+            text = rug_text[index]
+            len_xdata = len(xdata)
+            rug[index] = {
+                "type": "scatter",
+                "x": xdata,
+                "y": [glabel] * len_xdata if len_xdata else [],
+                "xaxis": "x1",
+                "yaxis": "y2",
+                "mode": "markers",
+                "name": glabel,
+                "legendgroup": glabel,
+                "showlegend": showlegend_value,
+                "text": text,
+                "marker": {"color": color, "symbol": "line-ns-open"},
+            }
         return rug
