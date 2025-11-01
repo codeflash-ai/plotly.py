@@ -81,14 +81,16 @@ def figure_rst(figure_list, sources_dir):
         rst code to embed the images in the document
     """
 
-    figure_paths = [
+    figure_paths_iter = (
         os.path.relpath(figure_path, sources_dir).replace(os.sep, "/").lstrip("/")
         for figure_path in figure_list
-    ]
+    )
     images_rst = ""
-    if not figure_paths:
+    try:
+        figure_name = next(figure_paths_iter)
+    except StopIteration:
         return images_rst
-    figure_name = figure_paths[0]
+
     figure_path = os.path.join("images", os.path.basename(figure_name))
     images_rst = SINGLE_HTML % figure_path
     return images_rst
