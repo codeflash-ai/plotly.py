@@ -5,6 +5,8 @@ import plotly.colors as clrs
 from plotly.graph_objs import graph_objs
 from plotly.subplots import make_subplots
 
+_LINE_OBJECT = graph_objs.scatter.Line(width=4, color="rgb(0,0,0)")
+
 pd = optional_imports.get_module("pandas")
 np = optional_imports.get_module("numpy")
 scipy_stats = optional_imports.get_module("scipy.stats")
@@ -97,11 +99,11 @@ def make_quartiles(q1, q3):
         x=[0, 0],
         y=[q1, q3],
         text=[
-            "lower-quartile: " + "{:0.2f}".format(q1),
-            "upper-quartile: " + "{:0.2f}".format(q3),
+            "lower-quartile: " + f"{q1:.2f}",
+            "upper-quartile: " + f"{q3:.2f}",
         ],
         mode="lines",
-        line=graph_objs.scatter.Line(width=4, color="rgb(0,0,0)"),
+        line=_LINE_OBJECT,
         hoverinfo="text",
     )
 
