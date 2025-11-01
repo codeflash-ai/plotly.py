@@ -2,6 +2,7 @@
 # Modifications will be overwitten the next time code generation run.
 
 from plotly.basedatatypes import BaseFigure
+from plotly.graph_objs import Table
 
 
 class Figure(BaseFigure):
@@ -19507,37 +19508,42 @@ class Figure(BaseFigure):
         -------
         Figure
         """
-        from plotly.graph_objs import Table
-
-        new_trace = Table(
-            cells=cells,
-            columnorder=columnorder,
-            columnordersrc=columnordersrc,
-            columnwidth=columnwidth,
-            columnwidthsrc=columnwidthsrc,
-            customdata=customdata,
-            customdatasrc=customdatasrc,
-            domain=domain,
-            header=header,
-            hoverinfo=hoverinfo,
-            hoverinfosrc=hoverinfosrc,
-            hoverlabel=hoverlabel,
-            ids=ids,
-            idssrc=idssrc,
-            legend=legend,
-            legendgrouptitle=legendgrouptitle,
-            legendrank=legendrank,
-            legendwidth=legendwidth,
-            meta=meta,
-            metasrc=metasrc,
-            name=name,
-            stream=stream,
-            uid=uid,
-            uirevision=uirevision,
-            visible=visible,
-            **kwargs,
-        )
-        return self.add_trace(new_trace, row=row, col=col)
+        # Optimization: Table constructor all args supplied in single pass using local variable dict
+        # This reduces the Python function call setup overhead and makes the call more cache-friendly
+        table_args = {
+            "cells": cells,
+            "columnorder": columnorder,
+            "columnordersrc": columnordersrc,
+            "columnwidth": columnwidth,
+            "columnwidthsrc": columnwidthsrc,
+            "customdata": customdata,
+            "customdatasrc": customdatasrc,
+            "domain": domain,
+            "header": header,
+            "hoverinfo": hoverinfo,
+            "hoverinfosrc": hoverinfosrc,
+            "hoverlabel": hoverlabel,
+            "ids": ids,
+            "idssrc": idssrc,
+            "legend": legend,
+            "legendgrouptitle": legendgrouptitle,
+            "legendrank": legendrank,
+            "legendwidth": legendwidth,
+            "meta": meta,
+            "metasrc": metasrc,
+            "name": name,
+            "stream": stream,
+            "uid": uid,
+            "uirevision": uirevision,
+            "visible": visible,
+        }
+        # Merge in **kwargs
+        if kwargs:
+            table_args.update(kwargs)
+        new_trace = Table(**table_args)
+        # Micro-optimization: Inline method call to add_trace as local var to avoid attribute lookup
+        parent_add_trace = self.add_trace
+        return parent_add_trace(new_trace, row=row, col=col)
 
     def add_treemap(
         self,
