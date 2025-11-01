@@ -4,6 +4,8 @@ from plotly import exceptions, optional_imports
 import plotly.colors as clrs
 from plotly.graph_objs import graph_objs
 from plotly.subplots import make_subplots
+import numpy as np
+from scipy import stats as scipy_stats
 
 pd = optional_imports.get_module("pandas")
 np = optional_imports.get_module("numpy")
@@ -159,14 +161,17 @@ def violinplot(vals, fillcolor="#1f77b4", rugplot=True):
     Refer to FigureFactory.create_violin() for docstring.
     """
     vals = np.asarray(vals, float)
-    #  summary statistics
-    vals_min = calc_stats(vals)["min"]
-    vals_max = calc_stats(vals)["max"]
-    q1 = calc_stats(vals)["q1"]
-    q2 = calc_stats(vals)["q2"]
-    q3 = calc_stats(vals)["q3"]
-    d1 = calc_stats(vals)["d1"]
-    d2 = calc_stats(vals)["d2"]
+    # summary statistics (optimized: single call)
+    stats = calc_stats(vals)
+    vals_min = stats["min"]
+    vals_max = stats["max"]
+    q1 = stats["q1"]
+    q2 = stats["q2"]
+    q3 = stats["q3"]
+    d1 = stats["d1"]
+    d2 = stats["d2"]
+
+    # kernel density estimation of pdf
 
     # kernel density estimation of pdf
     pdf = scipy_stats.gaussian_kde(vals)
@@ -378,12 +383,10 @@ def violin_dict(
     Returns fig for violin plot without colorscale.
 
     """
+    # Efficient group name extraction: preserves order
+    from collections import OrderedDict
 
-    # collect all group names
-    group_name = []
-    for name in data[group_header]:
-        if name not in group_name:
-            group_name.append(name)
+    group_name = list(OrderedDict.fromkeys(data[group_header]))
 
     if sort:
         group_name.sort()
@@ -398,6 +401,8 @@ def violin_dict(
             )
 
     gb = data.groupby([group_header])
+    # Precomputed group lookup to avoid repeated .get_group() cost
+    group_dict = {gr: gb.get_group(gr) for gr in group_name}
     L = len(group_name)
 
     fig = make_subplots(
@@ -405,7 +410,7 @@ def violin_dict(
     )
 
     for k, gr in enumerate(group_name):
-        vals = np.asarray(gb.get_group(gr)[data_header], float)
+        vals = np.asarray(group_dict[gr][data_header], float)
         plot_data, plot_xrange = violinplot(vals, fillcolor=colors[gr], rugplot=rugplot)
         for item in plot_data:
             fig.append_trace(item, 1, k + 1)
