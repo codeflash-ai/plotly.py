@@ -1,27 +1,20 @@
 import collections
-from collections import OrderedDict
+import itertools
 import re
 import warnings
+from collections import OrderedDict
 from contextlib import contextmanager
-from copy import deepcopy, copy
-import itertools
+from copy import copy, deepcopy
 from functools import reduce
 
-from _plotly_utils.utils import (
-    _natural_sort_strings,
-    _get_int_type,
-    split_multichar,
-    split_string_positions,
-    display_string_positions,
-    chomp_empty_strings,
-    find_closest_string,
-    convert_to_base64,
-)
 from _plotly_utils.exceptions import PlotlyKeyError
-from .optional_imports import get_module
+from _plotly_utils.utils import (_get_int_type, _natural_sort_strings,
+                                 chomp_empty_strings, convert_to_base64,
+                                 display_string_positions, find_closest_string,
+                                 split_multichar, split_string_positions)
 
-from . import shapeannotation
-from . import _subplots
+from . import _subplots, animation, shapeannotation
+from .optional_imports import get_module
 
 # Create Undefined sentinel value
 #   - Setting a property to None removes any existing value
@@ -638,7 +631,6 @@ class BaseFigure(object):
 
         # Animation property validators
         # -----------------------------
-        from . import animation
 
         self._animation_duration_validator = animation.DurationValidator()
         self._animation_easing_validator = animation.EasingValidator()
@@ -1445,23 +1437,35 @@ class BaseFigure(object):
         else:
             container_to_row_col = None
 
-        layout_keys_filters = [
-            lambda k: k.startswith(prefix) and self.layout[k] is not None,
-            lambda k: row is None
-            or container_to_row_col.get(k, (None, None, None))[0] == row,
-            lambda k: col is None
-            or container_to_row_col.get(k, (None, None, None))[1] == col,
-            lambda k: (
-                secondary_y is None
-                or container_to_row_col.get(k, (None, None, None))[2] == secondary_y
-            ),
+        # Pre-filter keys to those starting with prefix and value not None
+        filtered_keys = [
+            k
+            for k in self.layout
+            if k.startswith(prefix) and self.layout[k] is not None
         ]
-        layout_keys = reduce(
-            lambda last, f: filter(f, last),
-            layout_keys_filters,
-            # Natural sort keys so that xaxis20 is after xaxis3
-            _natural_sort_strings(list(self.layout)),
-        )
+
+        # Natural sort keys so that xaxis20 is after xaxis3
+        layout_keys = _natural_sort_strings(filtered_keys)
+
+        # Apply row/col/secondary_y filters if needed
+        if container_to_row_col is not None:
+            layout_keys = [
+                k
+                for k in layout_keys
+                if (
+                    row is None
+                    or container_to_row_col.get(k, (None, None, None))[0] == row
+                )
+                and (
+                    col is None
+                    or container_to_row_col.get(k, (None, None, None))[1] == col
+                )
+                and (
+                    secondary_y is None
+                    or container_to_row_col.get(k, (None, None, None))[2] == secondary_y
+                )
+            ]
+
         layout_objs = [self.layout[k] for k in layout_keys]
         return _generator(self._filter_by_selector(layout_objs, [], selector))
 
@@ -3775,14 +3779,11 @@ Invalid property path '{key_path_str}' for layout
             The image data
         """
         import plotly.io as pio
-        from plotly.io.kaleido import (
-            kaleido_available,
-            kaleido_major,
-            ENABLE_KALEIDO_V0_DEPRECATION_WARNINGS,
-            KALEIDO_DEPRECATION_MSG,
-            ORCA_DEPRECATION_MSG,
-            ENGINE_PARAM_DEPRECATION_MSG,
-        )
+        from plotly.io.kaleido import (ENABLE_KALEIDO_V0_DEPRECATION_WARNINGS,
+                                       ENGINE_PARAM_DEPRECATION_MSG,
+                                       KALEIDO_DEPRECATION_MSG,
+                                       ORCA_DEPRECATION_MSG, kaleido_available,
+                                       kaleido_major)
 
         if ENABLE_KALEIDO_V0_DEPRECATION_WARNINGS:
             if (
@@ -3870,14 +3871,11 @@ Invalid property path '{key_path_str}' for layout
         None
         """
         import plotly.io as pio
-        from plotly.io.kaleido import (
-            kaleido_available,
-            kaleido_major,
-            ENABLE_KALEIDO_V0_DEPRECATION_WARNINGS,
-            KALEIDO_DEPRECATION_MSG,
-            ORCA_DEPRECATION_MSG,
-            ENGINE_PARAM_DEPRECATION_MSG,
-        )
+        from plotly.io.kaleido import (ENABLE_KALEIDO_V0_DEPRECATION_WARNINGS,
+                                       ENGINE_PARAM_DEPRECATION_MSG,
+                                       KALEIDO_DEPRECATION_MSG,
+                                       ORCA_DEPRECATION_MSG, kaleido_available,
+                                       kaleido_major)
 
         if ENABLE_KALEIDO_V0_DEPRECATION_WARNINGS:
             if (
@@ -3921,10 +3919,8 @@ Invalid property path '{key_path_str}' for layout
             :class:`BasePlotlyType`, ``update_obj`` should be a tuple or list
             of dicts
         """
-        from _plotly_utils.basevalidators import (
-            CompoundValidator,
-            CompoundArrayValidator,
-        )
+        from _plotly_utils.basevalidators import (CompoundArrayValidator,
+                                                  CompoundValidator)
 
         if update_obj is None:
             # Nothing to do
@@ -4521,9 +4517,7 @@ class BasePlotlyType(object):
             # ### Child a compound property ###
             if child.plotly_name in self:
                 from _plotly_utils.basevalidators import (
-                    CompoundValidator,
-                    CompoundArrayValidator,
-                )
+                    CompoundArrayValidator, CompoundValidator)
 
                 validator = self._get_validator(child.plotly_name)
 
@@ -4750,11 +4744,9 @@ class BasePlotlyType(object):
         -------
         Any
         """
-        from _plotly_utils.basevalidators import (
-            CompoundValidator,
-            CompoundArrayValidator,
-            BaseDataValidator,
-        )
+        from _plotly_utils.basevalidators import (BaseDataValidator,
+                                                  CompoundArrayValidator,
+                                                  CompoundValidator)
 
         # Normalize prop
         # --------------
@@ -4883,11 +4875,9 @@ class BasePlotlyType(object):
         -------
         None
         """
-        from _plotly_utils.basevalidators import (
-            CompoundValidator,
-            CompoundArrayValidator,
-            BaseDataValidator,
-        )
+        from _plotly_utils.basevalidators import (BaseDataValidator,
+                                                  CompoundArrayValidator,
+                                                  CompoundValidator)
 
         # Normalize prop
         # --------------
