@@ -2,6 +2,7 @@
 # Modifications will be overwitten the next time code generation run.
 
 from plotly.basedatatypes import BaseFigure
+from plotly.graph_objs import Parcats
 
 
 class Figure(BaseFigure):
@@ -340,7 +341,10 @@ class Figure(BaseFigure):
         Figure(...)
 
         """
-        return super().add_trace(trace, row, col, secondary_y, exclude_empty_subplots)
+        # Avoid method resolution overhead by direct call
+        return BaseFigure.add_trace(
+            self, trace, row, col, secondary_y, exclude_empty_subplots
+        )
 
     def add_traces(
         self,
@@ -11945,7 +11949,6 @@ class Figure(BaseFigure):
         -------
         Figure
         """
-        from plotly.graph_objs import Parcats
 
         new_trace = Parcats(
             arrangement=arrangement,
@@ -11973,7 +11976,8 @@ class Figure(BaseFigure):
             visible=visible,
             **kwargs,
         )
-        return self.add_trace(new_trace, row=row, col=col)
+        # Direct BaseFigure.add_trace call for reduced overhead
+        return BaseFigure.add_trace(self, new_trace, row=row, col=col)
 
     def add_parcoords(
         self,
