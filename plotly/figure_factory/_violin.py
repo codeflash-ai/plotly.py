@@ -4,6 +4,7 @@ from plotly import exceptions, optional_imports
 import plotly.colors as clrs
 from plotly.graph_objs import graph_objs
 from plotly.subplots import make_subplots
+from plotly.graph_objs.layout import XAxis
 
 pd = optional_imports.get_module("pandas")
 np = optional_imports.get_module("numpy")
@@ -124,7 +125,7 @@ def make_XAxis(xaxis_title, xaxis_range):
     """
     Makes the x-axis for a violin plot.
     """
-    xaxis = graph_objs.layout.XAxis(
+    xaxis = XAxis(
         title=xaxis_title,
         range=xaxis_range,
         showgrid=False,
