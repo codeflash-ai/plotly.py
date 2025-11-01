@@ -307,22 +307,28 @@ def walk_push_to_template(fig_obj, template_obj, skip):
         elif isinstance(validator, CompoundArrayValidator) and fig_val:
             template_elements = list(template_val)
             template_element_names = [el.name for el in template_elements]
+            name_to_index = {
+                name: i
+                for i, name in enumerate(template_element_names)
+                if name is not None
+            }
             template_propdefaults = template_obj[prop[:-1] + "defaults"]
 
             for fig_el in fig_val:
                 element_name = fig_el.name
                 if element_name:
                     # No properties are skipped inside a named array element
-                    skip = set()
-                    if fig_el.name in template_element_names:
-                        item_index = template_element_names.index(fig_el.name)
-                        template_el = template_elements[item_index]
-                        walk_push_to_template(fig_el, template_el, skip)
+                    skip_inner = set()
+                    idx = name_to_index.get(element_name)
+                    if idx is not None:
+                        template_el = template_elements[idx]
+                        walk_push_to_template(fig_el, template_el, skip_inner)
                     else:
                         template_el = fig_el.__class__()
-                        walk_push_to_template(fig_el, template_el, skip)
+                        walk_push_to_template(fig_el, template_el, skip_inner)
                         template_elements.append(template_el)
-                        template_element_names.append(fig_el.name)
+                        name_to_index[element_name] = len(template_elements) - 1
+                    # Restore element name since it was pushed to template above
 
                     # Restore element name
                     # since it was pushed to template above
@@ -437,56 +443,73 @@ def to_templated(fig, skip=("title", "text")):
 
     # Process skip
     if not skip:
-        skip = set()
+        skip_set = set()
     else:
-        skip = set(skip)
+        skip_set = set(skip)
 
     # Always skip uids
-    skip.add("uid")
+    skip_set.add("uid")
+
+    # Initialize templated figure with deep copy of input figure
 
     # Initialize templated figure with deep copy of input figure
     templated_fig = copy.deepcopy(fig)
 
     # Handle layout
     walk_push_to_template(
-        templated_fig.layout, templated_fig.layout.template.layout, skip=skip
+        templated_fig.layout, templated_fig.layout.template.layout, skip=skip_set
     )
 
     # Handle traces
     trace_type_indexes = {}
-    for trace in list(templated_fig.data):
-        template_index = trace_type_indexes.get(trace.type, 0)
+    templated_layout_template_data = templated_fig.layout.template.data
+
+    # Prefetch trace types and traces as list for efficiency
+    templated_data_list = list(templated_fig.data)
+    for trace in templated_data_list:
+        trace_type = trace.type
+        template_index = trace_type_indexes.get(trace_type, 0)
 
         # Extend template traces if necessary
-        template_traces = list(templated_fig.layout.template.data[trace.type])
-        while len(template_traces) <= template_index:
-            # Append empty trace
-            template_traces.append(trace.__class__())
+        template_traces = list(templated_layout_template_data[trace_type])
+        traces_needed = template_index + 1 - len(template_traces)
+        if traces_needed > 0:
+            # Use repeated extension instead of append in a loop
+            template_traces.extend(trace.__class__() for _ in range(traces_needed))
+
+        # Get corresponding template trace
 
         # Get corresponding template trace
         template_trace = template_traces[template_index]
 
         # Perform push properties to template
-        walk_push_to_template(trace, template_trace, skip=skip)
+        walk_push_to_template(trace, template_trace, skip=skip_set)
 
-        # Update template traces in templated_fig
-        templated_fig.layout.template.data[trace.type] = template_traces
+        # Update template traces in templated_fig only if changed
+        templated_layout_template_data[trace_type] = template_traces
 
         # Update trace_type_indexes
-        trace_type_indexes[trace.type] = template_index + 1
+        trace_type_indexes[trace_type] = template_index + 1
+
+    # Remove useless trace arrays
 
     # Remove useless trace arrays
     any_non_empty = False
-    for trace_type in templated_fig.layout.template.data:
-        traces = templated_fig.layout.template.data[trace_type]
-        is_empty = [trace.to_plotly_json() == {"type": trace_type} for trace in traces]
-        if all(is_empty):
-            templated_fig.layout.template.data[trace_type] = None
+    for trace_type in templated_layout_template_data:
+        traces = templated_layout_template_data[trace_type]
+        # Use generator to short-circuit on first non-empty
+        is_empty = True
+        for trace in traces:
+            if trace.to_plotly_json() != {"type": trace_type}:
+                is_empty = False
+                break
+        if is_empty:
+            templated_layout_template_data[trace_type] = None
         else:
             any_non_empty = True
 
     # Check if we can remove the data altogether key
     if not any_non_empty:
+        templated_layout_template_data = None
         templated_fig.layout.template.data = None
-
     return templated_fig
