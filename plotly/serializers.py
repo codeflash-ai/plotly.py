@@ -25,9 +25,18 @@ def _py_to_js(v, widget_manager):
         Value that the ipywidget library can serialize natively
     """
 
+    # Handle Undefined
+    # ----------------
+    if v is Undefined:
+        return "_undefined_"
+
+    # Fast path for simple types
+    elif type(v) in (str, int, float, bool) or v is None:
+        return v
+
     # Handle dict recursively
     # -----------------------
-    if isinstance(v, dict):
+    elif isinstance(v, dict):
         return {k: _py_to_js(v, widget_manager) for k, v in v.items()}
 
     # Handle list/tuple recursively
@@ -52,11 +61,6 @@ def _py_to_js(v, widget_manager):
         else:
             # Convert all other numpy arrays to lists
             return v.tolist()
-
-    # Handle Undefined
-    # ----------------
-    if v is Undefined:
-        return "_undefined_"
 
     # Handle simple value
     # -------------------
