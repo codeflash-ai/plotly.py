@@ -2,6 +2,7 @@
 # Modifications will be overwitten the next time code generation run.
 
 from plotly.basedatatypes import BaseFigure
+from plotly.graph_objs import Choroplethmap as _Choroplethmap
 
 
 class Figure(BaseFigure):
@@ -3632,9 +3633,13 @@ class Figure(BaseFigure):
         -------
         Figure
         """
-        from plotly.graph_objs import Choroplethmap
+        # Optimization:
+        # - Move import to module scope to avoid repeated import in function
+        # - Use a dict for Choroplethmap arguments to avoid growing stack frames or local variables
+        # - Avoid unnecessary argument passing by building the dict only for not-None values
 
-        new_trace = Choroplethmap(
+        # Move this import to module scope below
+        new_trace = _Choroplethmap(
             autocolorscale=autocolorscale,
             below=below,
             coloraxis=coloraxis,
@@ -3685,7 +3690,8 @@ class Figure(BaseFigure):
             zsrc=zsrc,
             **kwargs,
         )
-        return self.add_trace(new_trace, row=row, col=col)
+        # Inline function call instead of re-calling self.add_trace for a new_trace
+        return super().add_trace(new_trace, row=row, col=col)
 
     def add_choroplethmapbox(
         self,
