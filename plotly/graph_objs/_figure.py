@@ -21976,6 +21976,15 @@ class Figure(BaseFigure):
             objects that satisfy all of the specified selection criteria
         """
 
+        # Optimize by avoiding Python's generic machinery for this common case
+        # of "select all mapbox objects" with no selector and no row/col filtering.
+        if selector is None and row is None and col is None:
+            layout = self.layout
+            mapbox_keys = [
+                k for k in layout if k.startswith("mapbox") and layout[k] is not None
+            ]
+            # Prefer generator expression for memory efficiency (instead of list -> generator)
+            return (layout[k] for k in mapbox_keys)
         return self._select_layout_subplots_by_prefix("mapbox", selector, row, col)
 
     def for_each_mapbox(self, fn, selector=None, row=None, col=None) -> "Figure":
@@ -22009,7 +22018,6 @@ class Figure(BaseFigure):
         """
         for obj in self.select_mapboxes(selector=selector, row=row, col=col):
             fn(obj)
-
         return self
 
     def update_mapboxes(
