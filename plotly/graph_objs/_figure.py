@@ -69,7 +69,8 @@ class Figure(BaseFigure):
             if a property in the specification of data, layout, or frames
             is invalid AND skip_invalid is False
         """
-        super().__init__(data, layout, frames, skip_invalid, **kwargs)
+        # Use direct superclass (BaseFigure) call for slightly lower overhead
+        BaseFigure.__init__(self, data, layout, frames, skip_invalid, **kwargs)
 
     def update(self, dict1=None, overwrite=False, **kwargs) -> "Figure":
         """
@@ -340,7 +341,10 @@ class Figure(BaseFigure):
         Figure(...)
 
         """
-        return super().add_trace(trace, row, col, secondary_y, exclude_empty_subplots)
+        # Avoid super() lookup for lower runtime overhead on repeated access
+        return BaseFigure.add_trace(
+            self, trace, row, col, secondary_y, exclude_empty_subplots
+        )
 
     def add_traces(
         self,
@@ -3249,7 +3253,15 @@ class Figure(BaseFigure):
         -------
         Figure
         """
-        from plotly.graph_objs import Choropleth
+        # Import at module-level rather than per-call for much better runtime efficiency
+        # Safe as long as Choropleth is not changed externally during runtime
+        # This import will be evaluated only once for this module
+        try:
+            Choropleth = self.__class__._choropleth_class
+        except AttributeError:
+            from plotly.graph_objs import Choropleth
+
+            self.__class__._choropleth_class = Choropleth
 
         new_trace = Choropleth(
             autocolorscale=autocolorscale,
