@@ -317,26 +317,38 @@ class _Distplot(object):
 
         :rtype (list) hist: list of histogram representations
         """
-        hist = [None] * self.trace_number
+        # Use local variables to avoid repeated list/dict lookups
+        trace_number = self.trace_number
+        hist_data = self.hist_data
+        histnorm = self.histnorm
+        group_labels = self.group_labels
+        bin_size = self.bin_size
+        start = self.start
+        end = self.end
+        colors = self.colors
+        n_colors = len(colors)
 
-        for index in range(self.trace_number):
-            hist[index] = dict(
-                type="histogram",
-                x=self.hist_data[index],
-                xaxis="x1",
-                yaxis="y1",
-                histnorm=self.histnorm,
-                name=self.group_labels[index],
-                legendgroup=self.group_labels[index],
-                marker=dict(color=self.colors[index % len(self.colors)]),
-                autobinx=False,
-                xbins=dict(
-                    start=self.start[index],
-                    end=self.end[index],
-                    size=self.bin_size[index],
-                ),
-                opacity=0.7,
-            )
+        hist = [None] * trace_number
+
+        # Use a simple for loop to fill hist efficiently
+        for index in range(trace_number):
+            hist[index] = {
+                "type": "histogram",
+                "x": hist_data[index],
+                "xaxis": "x1",
+                "yaxis": "y1",
+                "histnorm": histnorm,
+                "name": group_labels[index],
+                "legendgroup": group_labels[index],
+                "marker": {"color": colors[index % n_colors]},
+                "autobinx": False,
+                "xbins": {
+                    "start": start[index],
+                    "end": end[index],
+                    "size": bin_size[index],
+                },
+                "opacity": 0.7,
+            }
         return hist
 
     def make_kde(self):
