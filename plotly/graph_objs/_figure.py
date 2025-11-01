@@ -69,7 +69,9 @@ class Figure(BaseFigure):
             if a property in the specification of data, layout, or frames
             is invalid AND skip_invalid is False
         """
-        super().__init__(data, layout, frames, skip_invalid, **kwargs)
+        # Avoid excess attribute lookup by caching super().__init__
+        _super_init = super().__init__
+        _super_init(data, layout, frames, skip_invalid, **kwargs)
 
     def update(self, dict1=None, overwrite=False, **kwargs) -> "Figure":
         """
@@ -14224,9 +14226,18 @@ class Figure(BaseFigure):
         -------
         Figure
         """
-        from plotly.graph_objs import Scattercarpet
+        # Move the import to class scope to avoid repeated costly import for every function call.
+        # In hot code paths this reduces import overhead.
+        # However, for behavioral preservation, must bind only once and not in a shared global.
+        try:
+            _Scattercarpet = self.__class__._Scattercarpet
+        except AttributeError:
+            from plotly.graph_objs import Scattercarpet as _S
 
-        new_trace = Scattercarpet(
+            self.__class__._Scattercarpet = _S
+            _Scattercarpet = _S
+
+        new_trace = _Scattercarpet(
             a=a,
             asrc=asrc,
             b=b,
