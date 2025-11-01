@@ -2,17 +2,30 @@
 
 
 def _mean(x):
-    if len(x) == 0:
+    n = len(x)
+    if n == 0:
         raise ValueError("x must have positive length")
-    return float(sum(x)) / len(x)
+    return float(sum(x)) / n
 
 
 def _argmin(x):
-    return sorted(enumerate(x), key=lambda t: t[1])[0][0]
+    min_index = 0
+    min_value = x[0]
+    for i in range(1, len(x)):
+        if x[i] < min_value:
+            min_index = i
+            min_value = x[i]
+    return min_index
 
 
 def _argmax(x):
-    return sorted(enumerate(x), key=lambda t: t[1], reverse=True)[0][0]
+    max_index = 0
+    max_value = x[0]
+    for i in range(1, len(x)):
+        if x[i] > max_value:
+            max_index = i
+            max_value = x[i]
+    return max_index
 
 
 def _df_anno(xanchor, yanchor, x, y):
@@ -236,11 +249,11 @@ def split_dict_by_key_prefix(d, prefix):
     start with a prefix and another containing all the items whose keys do start
     with the prefix. Note that the prefix is not removed from the keys.
     """
-    no_prefix = dict()
-    with_prefix = dict()
-    for k in d.keys():
+    no_prefix = {}
+    with_prefix = {}
+    for k, v in d.items():
         if k.startswith(prefix):
-            with_prefix[k] = d[k]
+            with_prefix[k] = v
         else:
-            no_prefix[k] = d[k]
+            no_prefix[k] = v
     return (no_prefix, with_prefix)
