@@ -340,7 +340,12 @@ class Figure(BaseFigure):
         Figure(...)
 
         """
-        return super().add_trace(trace, row, col, secondary_y, exclude_empty_subplots)
+        # Inline the method to avoid one layer of indirection for runtime speed
+        # This avoids an extra Python stack frame and super().add_trace lookup
+        # (A PYTHONIC opt: using BaseFigure.add_trace directly allows method cache).
+        return BaseFigure.add_trace(
+            self, trace, row, col, secondary_y, exclude_empty_subplots
+        )
 
     def add_traces(
         self,
@@ -5490,7 +5495,15 @@ class Figure(BaseFigure):
         -------
         Figure
         """
-        from plotly.graph_objs import Contourcarpet
+        # Move the import up to class-level to avoid cost of repeated import per-call.
+        # Plotly modules are expensive (many Python import hooks).
+        # This only takes effect for repeated calls.
+        try:
+            Contourcarpet = self.__class__._Contourcarpet_cls
+        except AttributeError:
+            from plotly.graph_objs import Contourcarpet
+
+            self.__class__._Contourcarpet_cls = Contourcarpet
 
         new_trace = Contourcarpet(
             a=a,
