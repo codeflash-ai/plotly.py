@@ -12779,7 +12779,11 @@ class Figure(BaseFigure):
         -------
         Figure
         """
-        from plotly.graph_objs import Sankey
+        if not hasattr(self, "_Sankey_cls"):
+            from plotly.graph_objs import Sankey
+
+            self._Sankey_cls = Sankey
+        Sankey = self._Sankey_cls
 
         new_trace = Sankey(
             arrangement=arrangement,
