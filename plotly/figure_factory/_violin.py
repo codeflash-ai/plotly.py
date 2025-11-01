@@ -5,6 +5,18 @@ import plotly.colors as clrs
 from plotly.graph_objs import graph_objs
 from plotly.subplots import make_subplots
 
+_YAxis = graph_objs.layout.YAxis
+
+_yaxis_defaults = {
+    "showticklabels": True,
+    "autorange": True,
+    "ticklen": 4,
+    "showline": True,
+    "zeroline": False,
+    "showgrid": False,
+    "mirror": False,
+}
+
 pd = optional_imports.get_module("pandas")
 np = optional_imports.get_module("numpy")
 scipy_stats = optional_imports.get_module("scipy.stats")
@@ -141,17 +153,7 @@ def make_YAxis(yaxis_title):
     """
     Makes the y-axis for a violin plot.
     """
-    yaxis = graph_objs.layout.YAxis(
-        title=yaxis_title,
-        showticklabels=True,
-        autorange=True,
-        ticklen=4,
-        showline=True,
-        zeroline=False,
-        showgrid=False,
-        mirror=False,
-    )
-    return yaxis
+    return _YAxis(title=yaxis_title, **_yaxis_defaults)
 
 
 def violinplot(vals, fillcolor="#1f77b4", rugplot=True):
