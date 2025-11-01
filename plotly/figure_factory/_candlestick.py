@@ -28,9 +28,9 @@ def make_increasing_candle(open, high, low, close, dates, **kwargs):
     :rtype (list) candle_incr_data: list of the box trace for
         increasing candlesticks.
     """
-    increase_x, increase_y = _Candlestick(
-        open, high, low, close, dates, **kwargs
-    ).get_candle_increase()
+    increase_x, increase_y = get_candle_increase_optimized(
+        open, high, low, close, dates
+    )
 
     if "line" in kwargs:
         kwargs.setdefault("fillcolor", kwargs["line"]["color"])
@@ -210,6 +210,63 @@ def create_candlestick(open, high, low, close, dates=None, direction="both", **k
 
     layout = graph_objs.Layout()
     return graph_objs.Figure(data=data, layout=layout)
+
+
+def get_candle_increase_optimized(open, high, low, close, dates):
+    """
+    Optimized version of _Candlestick.get_candle_increase().
+    Behavioral preservation required.
+
+    :param (list) open: opening values
+    :param (list) high: high values
+    :param (list) low: low values
+    :param (list) close: closing values
+    :param (list) dates: list of datetime objects. Default: None
+    :rtype (Tuple[list, list]): (increase_x, increase_y)
+    """
+    open_arr = open
+    high_arr = high
+    low_arr = low
+    close_arr = close
+    if dates is not None:
+        x_arr = dates
+    else:
+        # avoid list comprehension for range
+        x_arr = list(range(len(open_arr)))
+
+    # Use a lightweight fast buffer for these accumulations
+    # Precalculate mask or use one-pass accumulation
+
+    # Accumulate increase_x and increase_y in one pass, avoiding intermediate lists
+    increase_x_raw = []
+    increase_y = []
+    # Localize for small speedup
+    open_ = open_arr
+    high_ = high_arr
+    low_ = low_arr
+    close_ = close_arr
+    x_ = x_arr
+    # Minor: move attribute lookup out of loop
+
+    for idx, o in enumerate(open_):
+        c = close_[idx]
+        if c > o:
+            increase_y.extend(
+                (
+                    low_[idx],
+                    o,
+                    c,
+                    c,
+                    c,
+                    high_[idx],
+                )
+            )
+            # Instead of storing just x and multiplying later, do direct extend
+            # But must preserve output shape. Build flat output directly.
+            increase_x_raw.extend([x_[idx]] * 6)
+
+    # Return in format expected
+    return increase_x_raw, increase_y
 
 
 class _Candlestick(object):
