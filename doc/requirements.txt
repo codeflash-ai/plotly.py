@@ -4,7 +4,7 @@ cufflinks==0.17.3
 dash-bio
 dask==2022.2.0
 datashader==0.14.4
-geopandas==0.8.1
+geopandas==1.1.2
 geoparse<=2.0.3
 igraph
 jinja2<3.1
